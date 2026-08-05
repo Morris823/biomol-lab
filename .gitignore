@@ -1,0 +1,11 @@
+# Credenciales locales de Supabase — NUNCA subir
+js/config.js
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp

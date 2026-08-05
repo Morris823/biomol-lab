@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BioMol Lab — Trazabilidad de muestras</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<div class="toast-container" id="toast-container"></div>
+
+<!-- MODAL INGRESO MANUAL -->
+<div id="modal-ingreso-manual" style="position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:5000;pointer-events:none">
+  <div style="background:var(--surface);border-radius:var(--radius-lg);padding:24px;width:520px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <i class="ti ti-file-plus" style="font-size:18px;color:var(--accent)"></i>
+      <div style="font-size:15px;font-weight:600">Registrar ingreso manual</div>
+      <button class="btn" style="margin-left:auto;padding:3px 7px" onclick="cerrarModalIngresoManual()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:20px">Crea manualmente el ingreso de una muestra que no llegó por LabCore.</div>
+    <div class="grid2" style="margin-bottom:10px">
+      <div class="fl-group">
+        <div class="fl-label">OD_ID *</div>
+        <input id="im-od-id" placeholder="Ej: 20250529-001" style="width:100%" />
+      </div>
+      <div class="fl-group">
+        <div class="fl-label">Código de estudio (prueba) *</div>
+        <select id="im-estudio-codigo" style="width:100%" onchange="imActualizarNombreEstudio()"></select>
+      </div>
+    </div>
+    <div class="grid2" style="margin-bottom:10px">
+      <div class="fl-group">
+        <div class="fl-label">Nombres *</div>
+        <input id="im-nombres" placeholder="Nombre(s) del paciente" style="width:100%" />
+      </div>
+      <div class="fl-group">
+        <div class="fl-label">Apellidos *</div>
+        <input id="im-apellidos" placeholder="Apellido(s) del paciente" style="width:100%" />
+      </div>
+    </div>
+    <div class="grid2" style="margin-bottom:10px">
+      <div class="fl-group">
+        <div class="fl-label">Cédula *</div>
+        <input id="im-cedula" placeholder="Número de identificación" style="width:100%" />
+      </div>
+      <div class="fl-group">
+        <div class="fl-label">Tipo de muestra</div>
+        <input id="im-tipo-muestra" placeholder="Ej: Sangre total, Suero..." style="width:100%" />
+      </div>
+    </div>
+    <div class="fl-group" style="margin-bottom:10px">
+      <div class="fl-label">Sede</div>
+      <input id="im-sede" placeholder="Nombre de la sede de origen" style="width:100%" list="im-sedes-list"/>
+      <datalist id="im-sedes-list"></datalist>
+    </div>
+    <div id="im-error" style="display:none;margin-bottom:10px;padding:8px 12px;border-radius:var(--radius);background:var(--red-bg);border:0.5px solid var(--red-border);color:var(--red);font-size:12px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="cerrarModalIngresoManual()">Cancelar</button>
+      <button class="btn btn-primary" id="im-btn-guardar" onclick="guardarIngresoManual()"><i class="ti ti-check"></i> Guardar ingreso</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONTROLES MATRÍCULA -->
+<div id="modal-controles" style="position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:5000;pointer-events:none">
+  <div style="background:var(--surface);border-radius:var(--radius-lg);padding:24px;width:440px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <i class="ti ti-flask-2" style="font-size:18px;color:var(--teal)"></i>
+      <div style="font-size:15px;font-weight:600">Agregar control</div>
+      <button class="btn" style="margin-left:auto;padding:3px 7px" onclick="cerrarModalControles()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">Los controles ocupan su propia posición y se muestran diferenciados en la tabla.</div>
+    <div class="fl-group" style="margin-bottom:10px">
+      <div class="fl-label">Nombre del control *</div>
+      <input id="ctrl-nombre" placeholder="Ej: VPH Positivo, HIV Negativo, CI Hep B..." style="width:100%" />
+    </div>
+    <div class="fl-group" style="margin-bottom:10px">
+      <div class="fl-label">Tipo de control</div>
+      <select id="ctrl-tipo" style="width:100%">
+        <option value="Control positivo">Control positivo</option>
+        <option value="Control negativo">Control negativo</option>
+        <option value="Control interno">Control interno</option>
+        <option value="Control externo">Control externo</option>
+        <option value="Control del equipo">Control del equipo</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
+    <div class="fl-group" style="margin-bottom:16px">
+      <div class="fl-label">Código de barra del tubo (opcional)</div>
+      <input id="ctrl-codigo" placeholder="Escanea o escribe el código del tubo de control" style="width:100%" />
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="cerrarModalControles()">Cancelar</button>
+      <button class="btn" style="background:var(--teal-bg);color:var(--teal);border-color:var(--teal)" onclick="agregarControl()"><i class="ti ti-plus"></i> Agregar control</button>
+    </div>
+  </div>
+</div>
+
+<!-- SELECTOR DE USUARIO (modal inicial) -->
+<div id="user-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:999">
+  <div style="background:var(--surface);border-radius:var(--radius-lg);padding:28px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div style="font-size:18px;font-weight:600;margin-bottom:4px">BioMol Lab</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:20px">Trazabilidad de muestras de biología molecular</div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:6px">¿Quién eres hoy?</div>
+    <select id="user-picker" style="width:100%;margin-bottom:16px;padding:10px">
+      <option value="">— Selecciona tu nombre —</option>
+    </select>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px" onclick="loginUser()">
+      <i class="ti ti-login"></i> Entrar al sistema
+    </button>
+  </div>
+</div>
+
+<div class="app" id="main-app" style="display:none">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="logo">
+      <div class="logo-title"><i class="ti ti-dna-2"></i> BioMol Lab</div>
+      <div class="logo-sub">Trazabilidad de muestras</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Principal</div>
+      <div class="nav-item active" onclick="nav('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
+      <div class="nav-item" onclick="nav('ingresos',this)"><i class="ti ti-file-import"></i> Ingresos</div>
+      <div class="nav-item" onclick="nav('recepcion',this)"><i class="ti ti-scan"></i> Recepción <span class="badge" id="badge-pend">0</span></div>
+      <div class="nav-item" onclick="nav('validacion',this)"><i class="ti ti-circle-check"></i> Validación</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Gestión</div>
+      <div class="nav-item" onclick="nav('reprocesos',this)"><i class="ti ti-refresh"></i> Reprocesos</div>
+      <div class="nav-item" onclick="nav('nueva-muestra',this)"><i class="ti ti-flask-2"></i> Nuevas muestras</div>
+      <div class="nav-item" onclick="nav('pendientes',this)"><i class="ti ti-clock"></i> Pendientes por recibir</div>
+      <div class="nav-item" onclick="nav('pendientes-validar',this)"><i class="ti ti-hourglass"></i> Pendientes por validar</div>
+      <div class="nav-item" onclick="nav('sin-ingreso',this)"><i class="ti ti-alert-triangle"></i> Sin ingreso <span class="badge" id="badge-sin-ingreso" style="display:none">0</span></div>
+
+      <div class="nav-item" onclick="nav('anulados',this)"><i class="ti ti-ban"></i> Anulados</div>
+      <div class="nav-item" onclick="nav('muestras',this)"><i class="ti ti-flask"></i> Todas las muestras</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Pruebas manuales</div>
+      <div class="nav-item" onclick="nav('matriculas',this)"><i class="ti ti-layout-grid"></i> Matrículas</div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Tuberculosis</div>
+      <div class="nav-item" onclick="nav('tuberculosis',this)"><i class="ti ti-lungs"></i> Corridas TB</div>
+      <div class="nav-item" onclick="nav('revision-manuales',this)"><i class="ti ti-file-check"></i> Revisión pendientes — Manuales</div>
+      <div class="nav-item" onclick="nav('revision-tb',this)"><i class="ti ti-lungs"></i> Revisión pendientes — TB</div>
+      <div class="nav-item" onclick="nav('remisiones',this)"><i class="ti ti-send"></i> Remisiones</div>
+      <div class="nav-item" onclick="nav('checklist',this)"><i class="ti ti-clipboard-check"></i> Cierre de turno — Bacteriólogos</div>
+      <div class="nav-item" onclick="nav('estadistica',this)"><i class="ti ti-chart-bar"></i> Estadística mensual (equipos)</div>
+      <div class="nav-item" onclick="nav('descarte',this)"><i class="ti ti-trash"></i> Descarte</div>
+      <div class="nav-item" onclick="nav('correo',this)"><i class="ti ti-mail"></i> Generar correo</div>
+    </div>
+    <div class="user-bar">
+      <div class="user-label">Sesión activa</div>
+      <div id="user-display" style="font-size:12px;font-weight:500;padding:5px 0;color:var(--text)"></div>
+      <button class="btn" style="width:100%;justify-content:center;margin-top:6px;font-size:11px" onclick="logout()"><i class="ti ti-logout"></i> Cambiar usuario</button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="page-title">Dashboard</div>
+      <span id="realtime-indicator" style="font-size:11px;color:var(--green);display:none"><i class="ti ti-wifi"></i> Tiempo real activo</span>
+      <button class="btn btn-primary" onclick="nav('recepcion',document.querySelector('[onclick*=recepcion]'))"><i class="ti ti-scan"></i> Recepción</button>
+    </div>
+
+    <div class="rel">
+      <div class="content">
+
+        <!-- DASHBOARD -->
+        <div class="page active" id="page-dashboard">
+          <!-- Banner de estadísticas completas -->
+          <div id="dash-banner-validadas" style="margin-bottom:14px;padding:10px 14px;background:var(--yellow-bg);border:0.5px solid var(--yellow-border);border-radius:var(--radius);display:flex;align-items:center;gap:10px">
+            <i class="ti ti-info-circle" style="color:var(--yellow);font-size:16px"></i>
+            <span style="font-size:12px;color:var(--yellow);flex:1">
+              Este dashboard muestra solo muestras activas para ahorrar datos. Para ver estadísticas completas (validadas, oportunidad, embudo total) haz clic en actualizar.
+            </span>
+            <button class="btn" style="font-size:11px" onclick="actualizarEstadisticasCompletas()"><i class="ti ti-refresh"></i> Actualizar estadísticas</button>
+          </div>
+
+          <!-- Embudo interactivo -->
+          <div style="margin-bottom:14px">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Flujo de muestras — haz clic para filtrar</div>
+            <div id="dash-funnel" style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap"></div>
+          </div>
+
+          <!-- Gráficas analytics -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+            <div class="panel">
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-chart-bar"></i> Muestras por prueba (mes actual)</span></div>
+              <div style="padding:14px" id="dash-chart-prueba"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-chart-area"></i> Volumen por día (últimos 30 días)</span></div>
+              <div style="padding:14px" id="dash-chart-dias"></div>
+            </div>
+          </div>
+          <div class="panel" style="margin-bottom:14px">
+            <div class="panel-header"><span class="panel-title"><i class="ti ti-clock-hour-4"></i> Oportunidad en validación por prueba (horas promedio recepción → validación)</span></div>
+            <div style="padding:14px" id="dash-chart-oportunidad"></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+            <div class="panel">
+              <div class="panel-header"><span class="panel-title">Por estado</span></div>
+              <div style="padding:10px 14px" id="dash-estados"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><span class="panel-title">Últimas recepciones</span></div>
+              <table><thead><tr><th>Hora</th><th>Código</th><th>Prueba(s)</th></tr></thead>
+              <tbody id="dash-recepciones"></tbody></table>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">Muestras recientes</span></div>
+            <table><thead><tr><th>Código</th><th>Paciente</th><th>Prueba</th><th>Tipo</th><th>Estado</th></tr></thead>
+            <tbody id="dash-tabla"></tbody></table>
+          </div>
+        </div>
+
+        <!-- INGRESOS -->
+        <div class="page" id="page-ingresos">
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title"><i class="ti ti-file-spreadsheet"></i> Importar ingresos de LabCore</span></div>
+            <div style="padding:16px">
+              <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
+                ondragover="event.preventDefault();this.style.background='var(--bg3)'"
+                ondragleave="this.style.background='var(--bg2)'"
+                ondrop="handleDrop(event)">
+                <i class="ti ti-upload" style="font-size:28px;color:var(--text3)"></i>
+                <div style="font-size:13px;font-weight:500;margin:8px 0 3px">Arrastra el archivo de LabCore aquí</div>
+                <div style="font-size:11px;color:var(--text3)">Formato A (O_ID primero) o Formato B (FECHA primero) — detectado automáticamente</div>
+                <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileInput(event)" />
+                <button class="btn" style="margin-top:10px" onclick="event.stopPropagation();document.getElementById('file-input').click()"><i class="ti ti-file-spreadsheet"></i> Seleccionar archivo</button>
+              </div>
+              <div id="imp-prog" style="display:none;margin-top:12px">
+                <div class="prog-wrap"><div class="prog-bar" id="imp-bar" style="width:0%"></div></div>
+                <div style="font-size:11px;color:var(--text2)" id="imp-lbl">Procesando...</div>
+              </div>
+            </div>
+          </div>
+          <div class="panel" id="imp-result" style="display:none">
+            <div class="panel-header"><span class="panel-title">Resultado de importación</span></div>
+            <div style="padding:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+              <div class="mc"><div class="mc-label">Total filas</div><div class="mc-value" id="imp-total">0</div></div>
+              <div class="mc"><div class="mc-label">Nuevos</div><div class="mc-value" style="color:var(--green)" id="imp-nuevos">0</div></div>
+              <div class="mc"><div class="mc-label">Duplicados</div><div class="mc-value" style="color:var(--yellow)" id="imp-dups">0</div></div>
+              <div class="mc"><div class="mc-label">Formato</div><div class="mc-value" style="font-size:13px" id="imp-fmt">—</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RECEPCION -->
+        <div class="page" id="page-recepcion">
+          <div class="scan-wrap">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:8px"><i class="ti ti-info-circle"></i> El registro es automático al completar el código — no necesitas presionar ningún botón</div>
+            <div class="scan-input-row">
+              <i class="ti ti-barcode"></i>
+              <input id="scan-in" placeholder="Escanea o escribe el código de la muestra..." autocomplete="off" oninput="onScanInput(this.value)" />
+            </div>
+            <div class="scan-fb" id="scan-fb"></div>
+            <div class="scan-stats">
+              <div class="sstat"><div class="sstat-n" style="color:var(--accent)" id="cnt-esc">0</div><div class="sstat-l">Escaneadas</div></div>
+              <div class="sstat"><div class="sstat-n" style="color:var(--green)" id="cnt-pru">0</div><div class="sstat-l">Pruebas</div></div>
+              <div class="sstat"><div class="sstat-n" style="color:var(--yellow)" id="cnt-pen">0</div><div class="sstat-l">Pendientes</div></div>
+              <div class="sstat"><div class="sstat-n" style="color:var(--teal)" id="cnt-pen-ges">0</div><div class="sstat-l">Ya gestionados</div></div>
+              <div class="sstat"><div class="sstat-n" style="color:var(--red)" id="cnt-dup">0</div><div class="sstat-l">Duplicados</div></div>
+            </div>
+          </div>
+
+          <!-- Escáner TB separado -->
+          <div class="panel" style="margin-bottom:14px;border:0.5px solid #B5C9B0">
+            <div class="panel-header" style="background:var(--green-bg);border-radius:var(--radius-lg) var(--radius-lg) 0 0">
+              <span class="panel-title" style="color:var(--green)"><i class="ti ti-lungs"></i> Recepción Tuberculosis</span>
+              <span style="font-size:10px;color:var(--green);opacity:.7">No suma al conteo principal</span>
+              <div class="sstat" style="margin-left:auto">
+                <div class="sstat-n" style="color:var(--green);font-size:18px" id="cnt-tb">0</div>
+                <div class="sstat-l">TB escaneadas</div>
+              </div>
+            </div>
+            <div style="padding:12px 14px">
+              <div style="font-size:11px;color:var(--text2);margin-bottom:8px"><i class="ti ti-info-circle"></i> Solo para muestras de tuberculosis — se registran por separado y no afectan el conteo del turno</div>
+              <div class="scan-input-row" style="border-color:#B5C9B0">
+                <i class="ti ti-barcode" style="color:var(--green)"></i>
+                <input id="scan-tb-in" placeholder="Escanea el código de la muestra de TB..." autocomplete="off" oninput="onScanTBInput(this.value)" />
+              </div>
+              <div class="scan-fb" id="scan-tb-fb"></div>
+            </div>
+            <table><thead><tr><th>Hora</th><th>Código</th><th>Paciente</th><th></th></tr></thead>
+            <tbody id="rec-tb-tabla"><tr><td colspan="4" class="empty-state">Sin muestras TB escaneadas en este turno...</td></tr></tbody></table>
+          </div>
+          <!-- Panel duplicados -->
+          <div id="rec-dup-panel" style="display:none;background:var(--yellow-bg);border:0.5px solid var(--yellow-border);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <i class="ti ti-copy" style="color:var(--yellow)"></i>
+              <span style="font-size:12px;font-weight:500;color:var(--yellow)">Tubos con código repetido en este turno</span>
+            </div>
+            <div id="rec-dup-body"></div>
+          </div>
+
+          <!-- Historial de cierres -->
+          <div class="panel" style="margin-bottom:14px">
+            <div class="panel-header" onclick="toggleHistCierres()" style="cursor:pointer">
+              <span class="panel-title"><i class="ti ti-history"></i> Historial de cierres de turno</span>
+              <span style="font-size:11px;color:var(--text3)" id="hist-cierres-count"></span>
+              <i class="ti ti-chevron-down" id="hist-cierres-icon" style="color:var(--text3);font-size:14px"></i>
+            </div>
+            <div id="hist-cierres-body" style="display:none">
+              <table>
+                <thead><tr><th>Fecha</th><th>Cerrado por</th><th>Escaneadas</th><th>Conteo físico</th><th>¿Cuadra?</th><th>Observaciones</th><th></th></tr></thead>
+                <tbody id="hist-cierres-tabla"><tr><td colspan="7" class="empty-state">Cargando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">Muestras escaneadas en este turno</span>
+              <button class="btn btn-yellow" onclick="nav('cierre',null)"><i class="ti ti-lock"></i> Cerrar turno</button>
+            </div>
+            <table><thead><tr><th>Hora</th><th>Código</th><th>Paciente</th><th>Pruebas</th><th></th></tr></thead>
+            <tbody id="rec-tabla"><tr><td colspan="4" class="empty-state">Escanea la primera muestra del turno...</td></tr></tbody></table>
+          </div>
+        </div>
+
+        <!-- CIERRE TURNO -->
+        <div class="page" id="page-cierre">
+          <div style="max-width:440px">
+            <div class="panel">
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-lock"></i> Cierre de turno</span></div>
+              <div style="padding:16px">
+
+                <!-- Resumen del sistema -->
+                <div style="background:var(--bg2);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:500">Lo que registró el sistema en este turno</div>
+                  <div style="display:flex;gap:20px;flex-wrap:wrap">
+                    <div>
+                      <div style="font-size:28px;font-weight:600;color:var(--accent)" id="cierre-total-sys">0</div>
+                      <div style="font-size:10px;color:var(--text2)">Tubos escaneados</div>
+                    </div>
+                    <div style="border-left:0.5px solid var(--border);padding-left:20px">
+                      <div style="font-size:28px;font-weight:600;color:#993C1D" id="cierre-tb-sys">0</div>
+                      <div style="font-size:10px;color:var(--text2)">TB (no cuentan)</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Conteo físico -->
+                <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:8px">Conteo físico</div>
+                <div class="count-cmp" id="cmp-conteo" style="margin-bottom:12px">
+                  <span style="flex:1;font-size:12px">Total de tubos contados físicamente:</span>
+                  <input type="number" min="0" id="cierre-fisico" placeholder="0"
+                    style="width:90px;text-align:center;font-size:20px;font-weight:600"
+                    oninput="checkCierre(this.value)" />
+                </div>
+                <div id="cierre-resultado" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:var(--radius);font-size:12px;font-weight:500"></div>
+
+                <!-- Fecha y obs -->
+                <div class="grid2" style="margin-bottom:12px">
+                  <div class="fl-group">
+                    <div class="fl-label">Fecha de cierre</div>
+                    <input type="date" id="cierre-fecha" style="width:100%" />
+                  </div>
+                  <div class="fl-group">
+                    <div class="fl-label">Observaciones (opcional)</div>
+                    <input id="cierre-obs" placeholder="Novedades del turno..." style="width:100%" />
+                  </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="cerrarTurno()"><i class="ti ti-check"></i> Confirmar cierre</button>
+                <button class="btn" style="margin-left:8px" onclick="nav('recepcion',document.querySelector('[onclick*=recepcion]'))">Volver a recepción</button>
+              </div>
+            </div>
+            <div id="cierre-ok" style="display:none"></div>
+          </div>
+        </div>
+
+        <!-- VALIDACION -->
+        <div class="page" id="page-validacion">
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title"><i class="ti ti-circle-check"></i> Importar validados de LabCore</span></div>
+            <div style="padding:14px">
+              <div style="background:var(--bg2);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px">
+                <div style="font-size:11px;font-weight:500;margin-bottom:6px">Busqué validados hasta</div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="datetime-local" id="val-hasta" style="flex:1" />
+                  <div style="font-size:10px;color:var(--text3)">La siguiente persona buscará desde aquí</div>
+                </div>
+              </div>
+              <div class="drop-zone" id="val-drop-zone" onclick="document.getElementById('val-file').click()">
+                <i class="ti ti-file-check" style="font-size:24px;color:var(--text3)"></i>
+                <div style="font-size:13px;font-weight:500;margin:6px 0 3px">Subir archivo de validados</div>
+                <div style="font-size:11px;color:var(--text3)">Cruce por OD_ID — cada prueba actualiza su estado de forma independiente</div>
+                <input type="file" id="val-file" accept=".xlsx,.xls" style="display:none" onchange="handleValFile(event)" />
+                <button class="btn" style="margin-top:8px" onclick="event.stopPropagation();document.getElementById('val-file').click()"><i class="ti ti-upload"></i> Seleccionar archivo</button>
+              </div>
+              <div id="val-prog-area" style="display:none;margin-top:10px">
+                <div style="height:5px;background:var(--bg3);border-radius:4px;overflow:hidden;margin-bottom:5px">
+                  <div id="val-prog-bar" style="height:100%;background:#639922;border-radius:4px;transition:width .3s;width:0%"></div>
+                </div>
+                <div style="font-size:11px;color:var(--text2)" id="val-prog-lbl">Procesando...</div>
+              </div>
+              <div style="margin-top:14px">
+                <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:7px">Historial de importaciones</div>
+                <div id="val-hist"><div style="color:var(--text3);font-size:12px">Cargando...</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- REPROCESOS -->
+        <div class="page" id="page-reprocesos">
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">Registrar reproceso</span></div>
+            <div style="padding:14px">
+              <div class="grid2" style="margin-bottom:10px">
+                <div class="fl-group">
+                  <div class="fl-label">Código muestra</div>
+                  <input id="rep-cod" placeholder="260522xxxxx" style="width:100%" />
+                </div>
+                <div class="fl-group">
+                  <div class="fl-label">Prueba</div>
+                  <select id="rep-prueba" style="width:100%">
+                    <option>VPH</option><option>VIH</option><option>Hepatitis B</option><option>Hepatitis C</option><option>CMV</option><option>Tuberculosis</option><option>HLA-B27</option><option>HLA-B57</option><option>Otra</option>
+                  </select>
+                </div>
+              </div>
+              <div class="fl-group" style="margin-bottom:10px">
+                <div class="fl-label">Motivo — escribe el código numérico o palabras clave</div>
+                <div class="ac-wrap">
+                  <input id="rep-motivo-input" placeholder="Ej: 5011 o 'aspiración'..." style="width:100%"
+                    autocomplete="off" oninput="acSearch(this.value)" onkeydown="acKey(event)"
+                    onfocus="acSearch(this.value)" onblur="setTimeout(closeAc,150)" />
+                  <div class="ac-drop" id="ac-drop"></div>
+                </div>
+                <div id="sel-motivo" style="display:none;margin-top:6px;padding:7px 10px;background:var(--green-bg);border:0.5px solid var(--green-border);border-radius:var(--radius);font-size:11px;display:none;align-items:center;gap:6px">
+                  <i class="ti ti-circle-check" style="color:var(--green)"></i>
+                  <span id="sel-motivo-txt"></span>
+                  <button class="btn" style="margin-left:auto;padding:1px 7px;font-size:10px" onclick="clearMotivo()">cambiar</button>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="registrarReproceso(false)"><i class="ti ti-plus"></i> Registrar reproceso</button>
+                <button class="btn btn-red" onclick="registrarReproceso(true)"><i class="ti ti-flask-2"></i> Solicitar nueva muestra</button>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">Reprocesos recientes</span>
+              <div class="chips" style="margin-left:8px">
+                <span class="chip active" id="rep-chip-activos" onclick="chipRep(this,'activos')">Activos</span>
+                <span class="chip" id="rep-chip-historico" onclick="chipRep(this,'historico')">Historial completo</span>
+              </div>
+              <input id="rep-buscar" placeholder="Buscar código, paciente, prueba..."
+                style="margin-left:12px;width:220px;font-size:11px;padding:3px 8px"
+                oninput="loadReprocesos()" />
+            </div>
+            <div style="padding:6px 12px;background:var(--bg2);border-bottom:0.5px solid var(--border);font-size:11px;color:var(--text2)">
+              <i class="ti ti-info-circle"></i> <strong>Activos</strong>: en reproceso o nueva muestra aún no validadas. <strong>Historial</strong>: todos los registros, incluyendo resueltos.
+            </div>
+            <table><thead><tr>
+              <th onclick="sortTable('rep-tabla',0)" style="cursor:pointer" title="Ordenar">Fecha <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('rep-tabla',1)" style="cursor:pointer" title="Ordenar">Código <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('rep-tabla',2)" style="cursor:pointer" title="Ordenar">Prueba <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th>Motivo</th>
+              <th onclick="sortTable('rep-tabla',4)" style="cursor:pointer" title="Ordenar">Registrado por <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('rep-tabla',5)" style="cursor:pointer" title="Ordenar">Estado actual <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th></th>
+            </tr></thead>
+            <tbody id="rep-tabla"><tr><td colspan="7" class="empty-state">Cargando...</td></tr></tbody></table>
+          </div>
+        </div>
+
+        <!-- NUEVAS MUESTRAS -->
+        <div class="page" id="page-nueva-muestra">
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-flask-2"></i> Nuevas muestras registradas</span>
+              <span style="font-size:11px;color:var(--text3)" id="nm-count"></span>
+              <input id="nm-buscar" placeholder="Buscar código, paciente, prueba..."
+                style="margin-left:12px;width:220px;font-size:11px;padding:3px 8px"
+                oninput="loadNuevasMuestras()" />
+            </div>
+            <table><thead><tr>
+              <th onclick="sortTable('nm-tabla',0)" style="cursor:pointer">Fecha <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('nm-tabla',1)" style="cursor:pointer">Código <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('nm-tabla',2)" style="cursor:pointer">Prueba <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th>Motivo</th>
+              <th onclick="sortTable('nm-tabla',4)" style="cursor:pointer">Registrado por <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('nm-tabla',5)" style="cursor:pointer">Estado actual <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th></th>
+            </tr></thead>
+            <tbody id="nm-tabla"><tr><td colspan="7" class="empty-state">Cargando...</td></tr></tbody></table>
+          </div>
+        </div>
+
+        <!-- PENDIENTES -->
+        <div class="page" id="page-pendientes">
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">Pendientes y gestionadas</span>
+              <div class="chips">
+                <span class="chip active" onclick="chipPend(this,'todas')">Todas</span>
+                <span class="chip" onclick="chipPend(this,'sin')">Sin gestionar</span>
+                <span class="chip" onclick="chipPend(this,'ges')">Gestionadas</span>
+              </div>
+            </div>
+            <div class="search-row">
+              <i class="ti ti-search" style="color:var(--text3)"></i>
+              <input placeholder="Código, paciente, sede..." oninput="filterPend(this.value)" />
+            </div>
+            <table><thead><tr>
+              <th onclick="sortTable('pend-tabla',0)" style="cursor:pointer">Código <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pend-tabla',1)" style="cursor:pointer">Cédula <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pend-tabla',2)" style="cursor:pointer">Paciente <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pend-tabla',3)" style="cursor:pointer">Prueba <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pend-tabla',4)" style="cursor:pointer">Sede <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pend-tabla',5)" style="cursor:pointer">Días <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th>Nota de gestión</th>
+              <th>Por</th>
+              <th onclick="sortTable('pend-tabla',8)" style="cursor:pointer">F. gestión <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th>Estado</th>
+            </tr></thead>
+            <tbody id="pend-tabla"><tr><td colspan="8" class="empty-state">Cargando...</td></tr></tbody></table>
+            <div id="pend-paginacion" style="padding:8px 14px;border-top:0.5px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
+          </div>
+        </div>
+
+        <!-- PENDIENTES POR VALIDAR (sin-validar) -->
+        <div class="page" id="page-pendientes-validar">
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-hourglass"></i> Pendientes por validar</span>
+              <span style="font-size:11px;color:var(--text3);margin-left:8px">Muestras recibidas que aún no tienen validación</span>
+            </div>
+            <div class="search-row">
+              <i class="ti ti-search" style="color:var(--text3)"></i>
+              <input id="pv-buscar" placeholder="Código, paciente, sede..." oninput="renderPendientesValidar()" />
+            </div>
+            <table><thead><tr>
+              <th onclick="sortTable('pv-tabla',0)" style="cursor:pointer">Código <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pv-tabla',1)" style="cursor:pointer">Cédula <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pv-tabla',2)" style="cursor:pointer">Paciente <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pv-tabla',3)" style="cursor:pointer">Prueba <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pv-tabla',4)" style="cursor:pointer">Sede <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pv-tabla',5)" style="cursor:pointer">F. recepción <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th onclick="sortTable('pv-tabla',6)" style="cursor:pointer">Días háb. <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              <th>Límite</th>
+              <th>Estado</th>
+            </tr></thead>
+            <tbody id="pv-tabla"><tr><td colspan="9" class="empty-state">Cargando...</td></tr></tbody></table>
+            <div id="pv-paginacion" style="padding:8px 14px;border-top:0.5px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
+          </div>
+        </div>
+        <div class="page" id="page-sin-ingreso">
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-alert-triangle"></i> Recibidas sin ingreso</span>
+              <span style="font-size:11px;color:var(--text3);flex:1;margin-left:6px" id="sin-ingreso-count"></span>
+              <button class="btn btn-primary" onclick="abrirModalIngresoManual()">
+                <i class="ti ti-file-plus"></i> Registrar ingreso manual
+              </button>
+            </div>
+            <div style="padding:10px 14px;background:var(--yellow-bg);border-bottom:0.5px solid var(--yellow-border);font-size:12px;color:var(--yellow)">
+              <i class="ti ti-info-circle"></i> Estas muestras fueron escaneadas en recepción pero no tenían ingreso al momento del escaneo.
+              Si después se subieron ingresos y aparecieron, desaparecen automáticamente. También puedes registrar el ingreso manualmente si tienes los datos del paciente.
+            </div>
+            <table>
+              <thead><tr><th>Fecha recepción</th><th>Código</th><th>Recibida por</th><th>Estado actual</th><th></th></tr></thead>
+              <tbody id="sin-ingreso-tabla"><tr><td colspan="5" class="empty-state">Cargando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="page" id="page-anulados">
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">Registrar anulado</span></div>
+            <div style="padding:14px;display:flex;gap:10px;align-items:flex-end">
+              <div class="fl-group" style="flex:1">
+                <div class="fl-label">Código muestra (OD_ID o código)</div>
+                <input id="anu-cod" placeholder="260522xxxxx" style="width:100%" />
+              </div>
+              <div class="fl-group" style="flex:2">
+                <div class="fl-label">Motivo de anulación</div>
+                <input id="anu-motivo" placeholder="Ej: Orden cancelada por médico" style="width:100%" />
+              </div>
+              <button class="btn" style="color:var(--text3)" onclick="registrarAnulado()"><i class="ti ti-ban"></i> Registrar</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">Anulados</span></div>
+            <table><thead><tr><th>Fecha</th><th>Código</th><th>Prueba</th><th>Paciente</th><th>Motivo</th><th>Por</th></tr></thead>
+            <tbody id="anu-tabla"><tr><td colspan="5" class="empty-state">Cargando...</td></tr></tbody></table>
+          </div>
+        </div>
+
+        <!-- TODAS LAS MUESTRAS -->
+        <!-- PRUEBAS MANUALES — MATRÍCULAS -->
+        <div class="page" id="page-matriculas">
+
+          <!-- Barra superior: matrícula activa o crear nueva -->
+          <div style="display:flex;gap:12px;margin-bottom:14px;align-items:flex-start">
+
+            <!-- Panel izquierdo: escaneo -->
+            <div style="flex:1">
+              <div class="panel" id="mat-panel-escaneo">
+                <div class="panel-header">
+                  <span class="panel-title"><i class="ti ti-layout-grid"></i> Matrícula activa</span>
+                  <span style="font-size:11px;color:var(--text3)" id="mat-id-label">Sin matrícula abierta</span>
+                  <button class="btn" style="margin-left:8px;background:var(--teal-bg);color:var(--teal);border-color:var(--teal)" onclick="abrirModalControles('mat')"><i class="ti ti-flask-2"></i> Agregar control</button>
+                  <button class="btn btn-primary" style="margin-left:6px" onclick="nuevaMatricula()"><i class="ti ti-plus"></i> Nueva matrícula</button>
+                </div>
+                <div style="padding:14px" id="mat-escaneo-body">
+                  <div style="text-align:center;padding:24px;color:var(--text3)">
+                    <i class="ti ti-layout-grid" style="font-size:32px"></i>
+                    <div style="margin-top:8px;font-size:13px">Crea una nueva matrícula para comenzar a escanear</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel derecho: verificación contra pendientes -->
+            <div style="width:340px">
+              <div class="panel">
+                <div class="panel-header"><span class="panel-title"><i class="ti ti-file-check"></i> Verificar pendientes</span></div>
+                <div style="padding:12px">
+                  <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Sube la lista de pendientes de LabCore para verificar cuáles no están en el montaje actual</div>
+                  <div class="drop-zone" style="padding:16px" onclick="document.getElementById('mat-pend-file').click()">
+                    <i class="ti ti-upload" style="font-size:20px;color:var(--text3)"></i>
+                    <div style="font-size:12px;margin:4px 0">Subir archivo de pendientes</div>
+                    <input type="file" id="mat-pend-file" accept=".xlsx,.xls" style="display:none" onchange="verificarPendientes(event)" />
+                  </div>
+                  <div id="mat-pend-result" style="margin-top:10px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Historial de matrículas -->
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">Matrículas anteriores</span>
+              <span style="font-size:11px;color:var(--text3)" id="mat-hist-count"></span>
+            </div>
+            <table><thead><tr><th>#</th><th>ID</th><th>Fecha</th><th>Posiciones</th><th>Pruebas</th><th>Estado</th><th>Creada por</th><th></th></tr></thead>
+            <tbody id="mat-hist-tabla"><tr><td colspan="7" class="empty-state">Cargando...</td></tr></tbody></table>
+          </div>
+
+        </div>
+
+        <!-- TUBERCULOSIS -->
+        <div class="page" id="page-tuberculosis">
+          <div style="display:flex;gap:12px;align-items:flex-start">
+
+            <!-- Panel principal -->
+            <div style="flex:1">
+              <div class="panel">
+                <div class="panel-header">
+                  <span class="panel-title"><i class="ti ti-lungs"></i> Corrida activa — Tuberculosis</span>
+                  <span style="font-size:11px;color:var(--text3)" id="tb-id-label">Sin corrida abierta</span>
+                  <button class="btn" style="margin-left:8px;background:var(--teal-bg);color:var(--teal);border-color:var(--teal)" onclick="abrirModalControles('tb')"><i class="ti ti-flask-2"></i> Agregar control</button>
+                  <button class="btn btn-primary" style="margin-left:6px" onclick="nuevaCorrridaTB()"><i class="ti ti-plus"></i> Nueva corrida</button>
+                </div>
+                <div style="padding:14px" id="tb-body">
+                  <div style="text-align:center;padding:24px;color:var(--text3)">
+                    <i class="ti ti-lungs" style="font-size:32px"></i>
+                    <div style="margin-top:8px;font-size:13px">Crea una nueva corrida para comenzar</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel derecho: acciones -->
+            <div style="width:260px;display:flex;flex-direction:column;gap:12px">
+              <div class="panel">
+                <div class="panel-header"><span class="panel-title">Acciones</span></div>
+                <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
+                  <button class="btn" onclick="copiarCodigosTB()" id="tb-btn-copiar" disabled><i class="ti ti-copy"></i> Copiar códigos</button>
+                  <button class="btn btn-yellow" onclick="cerrarCorridaTB()" id="tb-btn-cerrar" disabled><i class="ti ti-lock"></i> Cerrar corrida</button>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-header"><span class="panel-title" style="font-size:12px">Tipos de muestra frecuentes</span></div>
+                <div style="padding:10px;display:flex;flex-wrap:wrap;gap:5px" id="tb-tipos-rapidos">
+                  <span class="chip" onclick="setTipoRapido('Esputo')" style="cursor:pointer">Esputo</span>
+                  <span class="chip" onclick="setTipoRapido('LBA')" style="cursor:pointer">LBA</span>
+                  <span class="chip" onclick="setTipoRapido('Secreción bronquial')" style="cursor:pointer">Secreción bronquial</span>
+                  <span class="chip" onclick="setTipoRapido('Líquido pleural')" style="cursor:pointer">Líquido pleural</span>
+                  <span class="chip" onclick="setTipoRapido('Tejido')" style="cursor:pointer">Tejido</span>
+                  <span class="chip" onclick="setTipoRapido('Orina')" style="cursor:pointer">Orina</span>
+                  <span class="chip" onclick="setTipoRapido('Aspirado gástrico')" style="cursor:pointer">Aspirado gástrico</span>
+                  <span class="chip" onclick="setTipoRapido('LCR')" style="cursor:pointer">LCR</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Historial corridas TB -->
+          <div class="panel" style="margin-top:14px">
+            <div class="panel-header">
+              <span class="panel-title">Corridas anteriores</span>
+              <span style="font-size:11px;color:var(--text3)" id="tb-hist-count"></span>
+            </div>
+            <table><thead><tr><th>#</th><th>ID</th><th>Fecha</th><th>Muestras</th><th>Estado</th><th>Creada por</th><th></th></tr></thead>
+            <tbody id="tb-hist-tabla"><tr><td colspan="6" class="empty-state">Cargando...</td></tr></tbody></table>
+          </div>
+        </div>
+
+        </div>
+
+        <!-- GENERAR CORREO -->
+        <!-- REVISIÓN DE PENDIENTES (independiente) -->
+        <div class="page" id="page-revision-manuales">
+          <div class="panel" style="margin-bottom:14px">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-upload"></i> Subir Excel de pendientes LabCore — Pruebas manuales</span>
+            </div>
+            <div style="padding:12px;display:flex;align-items:center;gap:12px">
+              <div class="drop-zone" style="padding:12px 20px;flex:1" onclick="document.getElementById('rp-file-manuales').click()">
+                <i class="ti ti-upload" style="font-size:18px;color:var(--text3)"></i>
+                <div style="font-size:12px;margin:2px 0">Subir Excel de pendientes LabCore (.xlsx)</div>
+                <input type="file" id="rp-file-manuales" accept=".xlsx,.xls" style="display:none" onchange="procesarSeguimientoPendientes(event,'manuales')" />
+              </div>
+              <div class="fl-group" style="min-width:200px">
+                <div class="fl-label">Buscado en LabCore hasta</div>
+                <input type="datetime-local" id="seg-fecha-busqueda-manuales" style="width:100%" />
+              </div>
+              <div style="font-size:11px;color:var(--text3);max-width:180px">
+                Cruza automáticamente con el gestor. Detecta muestras perdidas, vencidas y muestra la gestión de auxiliares.
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-list-check"></i> Registro de revisión — Pruebas manuales</span>
+              <span style="font-size:11px;color:var(--text3);margin-left:8px" id="seg-count-label-manuales"></span>
+              <input id="seg-buscar-manuales" placeholder="Buscar código, paciente, prueba..."
+                style="margin-left:12px;width:220px;font-size:11px;padding:3px 8px"
+                oninput="renderSegTabla('manuales')" />
+              <div class="chips" style="margin-left:auto">
+                <span class="chip active" id="seg-chip-activos-manuales" onclick="chipSeg(this,'activos','manuales')">Activos</span>
+                <span class="chip" id="seg-chip-todos-manuales" onclick="chipSeg(this,'todos','manuales')">Todos</span>
+              </div>
+            </div>
+            <div style="padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
+              <span style="display:flex;align-items:center;gap:5px">
+                <span style="width:10px;height:10px;border-radius:3px;background:var(--red-bg);border:0.5px solid var(--red-border)"></span>
+                <strong style="color:var(--red)">Rojo</strong> = perdida, no está en el gestor
+              </span>
+              <span style="display:flex;align-items:center;gap:5px">
+                <span style="width:10px;height:10px;border-radius:3px;background:var(--yellow-bg);border:0.5px solid var(--yellow-border)"></span>
+                <strong style="color:var(--yellow)">Amarillo</strong> = ya gestionada
+              </span>
+              <span style="display:flex;align-items:center;gap:5px">
+                <span style="width:10px;height:10px;border-radius:3px;background:var(--green-bg);border:0.5px solid var(--green-border)"></span>
+                <strong style="color:var(--green)">Verde</strong> = ya está en una matrícula
+              </span>
+              <span style="display:flex;align-items:center;gap:5px">
+                <span style="border-bottom:2px solid var(--green);color:var(--green);padding-bottom:1px">Recibida</span> = ya escaneada en recepción
+              </span>
+            </div>
+            <div style="overflow:auto;max-height:calc(100vh - 320px)">
+              <table>
+                <thead style="position:sticky;top:0;z-index:2;background:var(--surface)">
+                  <tr>
+                    <th>Código</th><th>Paciente</th><th>Prueba</th><th>Sede</th>
+                    <th>Días háb.</th><th>Recepción</th><th>Nota auxiliar</th>
+                    <th>Observación seguimiento</th><th>Por</th><th>Estado</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="seg-tabla-manuales"><tr><td colspan="11" class="empty-state">Sube un Excel para iniciar la revisión</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-revision-tb">
+          <div class="panel" style="margin-bottom:14px">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-upload"></i> Subir Excel de pendientes LabCore — Tuberculosis</span>
+            </div>
+            <div style="padding:12px;display:flex;align-items:center;gap:12px">
+              <div class="drop-zone" style="padding:12px 20px;flex:1" onclick="document.getElementById('rp-file-tb').click()">
+                <i class="ti ti-upload" style="font-size:18px;color:var(--text3)"></i>
+                <div style="font-size:12px;margin:2px 0">Subir Excel de pendientes LabCore (.xlsx)</div>
+                <input type="file" id="rp-file-tb" accept=".xlsx,.xls" style="display:none" onchange="procesarSeguimientoPendientes(event,'tb')" />
+              </div>
+              <div class="fl-group" style="min-width:200px">
+                <div class="fl-label">Buscado en LabCore hasta</div>
+                <input type="datetime-local" id="seg-fecha-busqueda-tb" style="width:100%" />
+              </div>
+              <div style="font-size:11px;color:var(--text3);max-width:180px">
+                Cruza automáticamente con el gestor. Detecta muestras perdidas, vencidas y muestra la gestión de auxiliares.
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-list-check"></i> Registro de revisión — Tuberculosis</span>
+              <span style="font-size:11px;color:var(--text3);margin-left:8px" id="seg-count-label-tb"></span>
+              <input id="seg-buscar-tb" placeholder="Buscar código, paciente, prueba..."
+                style="margin-left:12px;width:220px;font-size:11px;padding:3px 8px"
+                oninput="renderSegTabla('tb')" />
+              <div class="chips" style="margin-left:auto">
+                <span class="chip active" id="seg-chip-activos-tb" onclick="chipSeg(this,'activos','tb')">Activos</span>
+                <span class="chip" id="seg-chip-todos-tb" onclick="chipSeg(this,'todos','tb')">Todos</span>
+              </div>
+            </div>
+            <div style="padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
+              <span style="display:flex;align-items:center;gap:5px">
+                <span style="width:10px;height:10px;border-radius:3px;background:var(--red-bg);border:0.5px solid var(--red-border)"></span>
+                <strong style="color:var(--red)">Rojo</strong> = perdida, no está en el gestor
+              </span>
+              <span style="display:flex;align-items:center;gap:5px">
+                <span style="width:10px;height:10px;border-radius:3px;background:var(--yellow-bg);border:0.5px solid var(--yellow-border)"></span>
+                <strong style="color:var(--yellow)">Amarillo</strong> = ya gestionada
+              </span>
+              <span style="display:flex;align-items:center;gap:5px">
+                <span style="width:10px;height:10px;border-radius:3px;background:var(--green-bg);border:0.5px solid var(--green-border)"></span>
+                <strong style="color:var(--green)">Verde</strong> = ya está en una corrida TB
+              </span>
+              <span style="display:flex;align-items:center;gap:5px">
+                <span style="border-bottom:2px solid var(--green);color:var(--green);padding-bottom:1px">Recibida</span> = ya escaneada en recepción
+              </span>
+            </div>
+            <div style="overflow:auto;max-height:calc(100vh - 320px)">
+              <table>
+                <thead style="position:sticky;top:0;z-index:2;background:var(--surface)">
+                  <tr>
+                    <th>Código</th><th>Paciente</th><th>Prueba</th><th>Sede</th>
+                    <th>Días háb.</th><th>Recepción</th><th>Nota auxiliar</th>
+                    <th>Observación seguimiento</th><th>Por</th><th>Estado</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="seg-tabla-tb"><tr><td colspan="11" class="empty-state">Sube un Excel para iniciar la revisión</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- REMISIONES -->
+        <div class="page" id="page-remisiones">
+          <div class="panel" style="margin-bottom:14px" id="rem-panel-activa">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-send"></i> Remisión activa</span>
+              <span style="font-size:11px;color:var(--text3)" id="rem-id-label">Sin remisión abierta</span>
+              <button class="btn btn-primary" style="margin-left:auto" onclick="nuevaRemision()"><i class="ti ti-plus"></i> Nueva remisión</button>
+            </div>
+            <div style="padding:14px" id="rem-escaneo-body">
+              <div style="text-align:center;padding:24px;color:var(--text3)">
+                <i class="ti ti-send" style="font-size:32px"></i>
+                <div style="margin-top:8px;font-size:13px">Crea una nueva remisión para comenzar a escanear</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">Remisiones anteriores</span>
+              <span style="font-size:11px;color:var(--text3)" id="rem-hist-count"></span>
+            </div>
+            <table><thead><tr><th>#</th><th>Código remisión</th><th>Fecha</th><th>Muestras</th><th>Estado</th><th>Remitida por</th><th></th></tr></thead>
+            <tbody id="rem-hist-tabla"><tr><td colspan="7" class="empty-state">Cargando...</td></tr></tbody></table>
+          </div>
+        </div>
+
+        <!-- CHECKLIST CIERRE DE TURNO -->
+        <div class="page" id="page-checklist">
+          <div style="max-width:900px;height:calc(100vh - 120px);overflow-y:auto;padding-right:8px">
+            <div class="panel" style="margin-bottom:14px">
+              <div class="panel-header">
+                <span class="panel-title"><i class="ti ti-calendar"></i> Fecha del checklist</span>
+                <input type="date" id="cl-fecha" style="margin-left:12px" onchange="cambiarFechaChecklist()" />
+                <span style="font-size:11px;color:var(--text3);margin-left:12px">Un solo registro por día — cualquiera puede marcar su parte</span>
+              </div>
+              <div style="padding:12px" id="cl-boton-cerrar-wrap"></div>
+            </div>
+
+            <!-- EQUIPOS MAÑANA -->
+            <div class="panel" style="margin-bottom:14px">
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-device-desktop"></i> Equipos — turno mañana</span></div>
+              <div id="cl-equipos-manana" style="padding:14px"></div>
+            </div>
+
+            <!-- EQUIPOS TARDE -->
+            <div class="panel" style="margin-bottom:14px">
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-device-desktop"></i> Equipos — turno tarde</span></div>
+              <div id="cl-equipos-tarde" style="padding:14px"></div>
+            </div>
+
+            <!-- VALIDACIÓN -->
+            <div class="panel" style="margin-bottom:14px">
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-checkbox"></i> Validación</span></div>
+              <div id="cl-validacion" style="padding:14px"></div>
+            </div>
+
+            <!-- PRUEBAS MANUALES -->
+            <div class="panel" style="margin-bottom:14px">
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-flask-2"></i> Pruebas manuales</span></div>
+              <div id="cl-manuales" style="padding:14px"></div>
+            </div>
+
+            <!-- TUBERCULOSIS -->
+            <div class="panel" style="margin-bottom:14px">
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-lungs"></i> Tuberculosis</span></div>
+              <div id="cl-tb" style="padding:14px"></div>
+            </div>
+
+            <!-- HISTORIAL -->
+            <div class="panel" style="margin-bottom:14px">
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-history"></i> Historial de checklists</span></div>
+              <table><thead><tr><th>Fecha</th><th style="text-align:center">Completado</th><th>Estado</th></tr></thead>
+                <tbody id="cl-historial"><tr><td colspan="3" class="empty-state">Cargando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- DESCARTE -->
+        <!-- ESTADÍSTICA MENSUAL EQUIPOS -->
+        <div class="page" id="page-estadistica">
+          <div style="max-width:1000px;height:calc(100vh - 120px);overflow-y:auto;padding-right:4px">
+
+            <div class="panel" style="margin-bottom:16px">
+              <div class="panel-header">
+                <span class="panel-title"><i class="ti ti-upload"></i> Subir libros de Excel del equipo</span>
+              </div>
+              <div style="padding:16px">
+                <div style="font-size:11px;color:var(--text2);margin-bottom:12px">
+                  Sube los 5 archivos (QCRESULT, CALRESULT, QCEXCEPTION, CALEXCEPTION, SPECIMENEXCEPTION). El gestor los identifica automáticamente por su nombre y cuenta las filas por prueba usando la columna "Nombre del ensayo".
+                </div>
+                <div class="drop-zone" style="padding:20px" onclick="document.getElementById('est-files').click()">
+                  <i class="ti ti-upload" style="font-size:24px;color:var(--text3)"></i>
+                  <div style="font-size:13px;margin:6px 0">Subir libros de Excel (puedes seleccionar varios a la vez)</div>
+                  <input type="file" id="est-files" accept=".xlsx,.xls" multiple style="display:none" onchange="procesarArchivosEstadistica(event)" />
+                </div>
+                <div id="est-archivos-cargados" style="margin-top:12px"></div>
+              </div>
+            </div>
+
+            <div class="panel" id="est-resultado-panel" style="display:none">
+              <div class="panel-header">
+                <span class="panel-title"><i class="ti ti-table"></i> Conteo backup del mes</span>
+                <button class="btn" style="margin-left:auto;font-size:11px" onclick="copiarEstadistica()"><i class="ti ti-copy"></i> Copiar tabla</button>
+              </div>
+              <div style="overflow-x:auto">
+                <table id="est-tabla-resultado"></table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-descarte">
+          <div style="max-width:900px;height:calc(100vh - 120px);overflow-y:auto;padding-right:4px">
+
+            <div style="padding:12px 16px;background:var(--red-bg);border:0.5px solid var(--red-border);border-radius:var(--radius-lg);margin-bottom:16px;display:flex;align-items:center;gap:10px">
+              <i class="ti ti-alert-triangle" style="font-size:20px;color:var(--red);flex-shrink:0"></i>
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--red)">Verificar antes de descartar</div>
+                <div style="font-size:11px;color:var(--red);opacity:.85">No descartes muestras sin validar. Revisa los semáforos antes de proceder.</div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+              <div class="panel">
+                <div class="panel-header"><span class="panel-title"><i class="ti ti-clock"></i> Pendiente sin gestionar más antiguo</span></div>
+                <div style="padding:16px" id="descarte-pendiente-card"><div style="color:var(--text3);font-size:12px">Cargando...</div></div>
+              </div>
+              <div class="panel">
+                <div class="panel-header"><span class="panel-title"><i class="ti ti-calendar-x"></i> Muestra sin validar más antigua</span></div>
+                <div style="padding:16px" id="descarte-sinval-card"><div style="color:var(--text3);font-size:12px">Cargando...</div></div>
+              </div>
+            </div>
+
+            <div class="panel" style="margin-bottom:16px">
+              <div class="panel-header">
+                <span class="panel-title"><i class="ti ti-table"></i> Estado por prueba — muestras sin validar</span>
+                <span style="font-size:11px;color:var(--text3);margin-left:8px">Solo VPH · VIH · VHB · VHC · CMV</span>
+              </div>
+              <div id="descarte-por-prueba" style="padding:0;overflow-y:auto;max-height:280px">
+                <div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Cargando...</div>
+              </div>
+            </div>
+
+            <div class="panel" style="margin-bottom:16px">
+              <div class="panel-header">
+                <span class="panel-title"><i class="ti ti-trash"></i> Registro de descarte</span>
+                <span style="font-size:11px;color:var(--text3);margin-left:8px">Anota cada vez que se hace descarte</span>
+              </div>
+              <div style="padding:14px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                  <div class="fl-group">
+                    <div class="fl-label">Fecha de descarte</div>
+                    <input type="date" id="descarte-fecha-reg" style="width:100%" />
+                  </div>
+                  <div class="fl-group">
+                    <div class="fl-label">Descartó hasta (fecha)</div>
+                    <input type="date" id="descarte-hasta" style="width:100%" />
+                  </div>
+                </div>
+                <div class="fl-group" style="margin-bottom:10px">
+                  <div class="fl-label">Observaciones (opcional)</div>
+                  <input id="descarte-obs-reg" placeholder="Ej: se descartaron VPH y cargas virales hasta el 10 de junio..." style="width:100%" />
+                </div>
+                <button class="btn btn-primary" onclick="guardarRegistroDescarte()"><i class="ti ti-check"></i> Registrar descarte</button>
+              </div>
+              <div id="descarte-registros-lista" style="overflow-y:auto;max-height:200px">
+                <div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Sin registros de descarte aún</div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-title"><i class="ti ti-notes"></i> Notas de revisión LabCore</span>
+                <span style="font-size:11px;color:var(--text3);margin-left:8px">Registra aquí las notas que ves en LabCore y no puedes exportar</span>
+              </div>
+              <div style="padding:14px">
+                <div style="display:flex;gap:8px;margin-bottom:12px">
+                  <input id="descarte-nota-cod" placeholder="Código del tubo..." style="width:180px" />
+                  <input id="descarte-nota-texto" placeholder="Nota de LabCore..." style="flex:1" />
+                  <button class="btn btn-primary" onclick="guardarNotaDescarte()"><i class="ti ti-plus"></i> Agregar</button>
+                </div>
+                <div id="descarte-notas-lista" style="overflow-y:auto;max-height:200px">
+                  <div style="color:var(--text3);font-size:12px;text-align:center;padding:12px">Sin notas registradas aún</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-correo">
+          <div style="max-width:680px">
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-title"><i class="ti ti-mail"></i> Generar correo</span>
+                <span style="font-size:11px;color:var(--text3)">Escanea los tubos y genera el correo listo para enviar</span>
+              </div>
+              <div style="padding:14px">
+                <!-- Motivo -->
+                <div class="fl-group" style="margin-bottom:12px">
+                  <div class="fl-label">Motivo de la solicitud</div>
+                  <textarea id="correo-motivo" rows="3"
+                    placeholder="Ej: Volumen insuficiente, muestra hemolizada, tubo sin anticoagulante..."
+                    style="width:100%;resize:vertical;font-size:12px;padding:8px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);font-family:var(--font);color:var(--text)"></textarea>
+                </div>
+                <!-- Escáner -->
+                <div style="font-size:11px;color:var(--text2);margin-bottom:8px"><i class="ti ti-info-circle"></i> Escanea uno por vez — agrega todos los que necesites</div>
+                <div class="scan-input-row">
+                  <i class="ti ti-barcode"></i>
+                  <input id="correo-scan-in" placeholder="Escanea o escribe el código del tubo..." autocomplete="off"
+                    oninput="onCorreoScanInput(this.value)" />
+                </div>
+                <div id="correo-scan-fb" class="scan-fb" style="margin-top:6px"></div>
+              </div>
+              <div id="correo-tabla-wrap" style="display:none">
+                <table>
+                  <thead><tr><th>Código</th><th>Cédula</th><th>Nombre completo</th><th>Sede</th><th></th></tr></thead>
+                  <tbody id="correo-tabla"></tbody>
+                </table>
+                <div style="padding:12px 14px;display:flex;gap:8px;border-top:0.5px solid var(--border)">
+                  <button class="btn btn-primary" onclick="copiarCorreo()"><i class="ti ti-copy"></i> Copiar correo completo</button>
+                  <button class="btn btn-red" onclick="limpiarCorreo()"><i class="ti ti-trash"></i> Limpiar todo</button>
+                </div>
+              </div>
+              <div id="correo-empty" style="padding:24px 14px;color:var(--text3);font-size:12px;text-align:center">
+                <i class="ti ti-barcode" style="font-size:28px;display:block;margin-bottom:8px;opacity:.3"></i>
+                Escribe el motivo y escanea el primer tubo para comenzar
+              </div>
+            </div>
+            <!-- Preview -->
+            <div class="panel" id="correo-preview-panel" style="display:none;margin-top:14px">
+              <div class="panel-header">
+                <span class="panel-title"><i class="ti ti-check"></i> ¡Copiado! Pega esto en tu correo</span>
+                <button class="btn" style="margin-left:auto;font-size:11px" onclick="copiarCorreo()"><i class="ti ti-copy"></i> Volver a copiar</button>
+              </div>
+              <pre id="correo-preview" style="padding:16px;font-size:12px;font-family:var(--font);white-space:pre-wrap;color:var(--text2);margin:0;background:var(--bg2);border-radius:0 0 var(--radius-lg) var(--radius-lg);line-height:1.6"></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-muestras">
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title"><i class="ti ti-flask"></i> Todas las muestras</span><span style="font-size:10px;color:var(--text3)" id="total-lbl"></span></div>
+            <div class="filters-bar">
+              <div class="filter-row">
+                <div class="fl-group" style="flex:1;min-width:180px">
+                  <div class="fl">Buscar</div>
+                  <input id="q-search" placeholder="Código, cédula, paciente, sede..." oninput="applyFilters()" style="width:100%" />
+                </div>
+                <div class="fl-group">
+                  <div class="fl">Recepción desde</div>
+                  <input type="date" id="f-desde" oninput="applyFilters()" />
+                </div>
+                <div class="fl-group">
+                  <div class="fl">Recepción hasta</div>
+                  <input type="date" id="f-hasta" oninput="applyFilters()" />
+                </div>
+                <div class="fl-group">
+                  <div class="fl">F. ingreso</div>
+                  <input type="date" id="f-ingreso" oninput="applyFilters()" />
+                </div>
+                <button class="btn" onclick="clearFilters()" style="align-self:flex-end"><i class="ti ti-x"></i></button>
+              </div>
+              <div class="filter-row">
+                <span style="font-size:10px;color:var(--text3)">Estado:</span>
+                <div class="chips" id="chips-estado">
+                  <span class="chip active" onclick="chipEstado(this,'todos')">Todos</span>
+                  <span class="chip" onclick="chipEstado(this,'pendiente')">Pendiente</span>
+                  <span class="chip" onclick="chipEstado(this,'recibido')">Recibido</span>
+                  <span class="chip" onclick="chipEstado(this,'sin-validar')">Sin validar</span>
+                  <span class="chip" onclick="chipEstado(this,'validado')">Validado</span>
+                  <span class="chip" onclick="chipEstado(this,'reproceso')">Reproceso</span>
+                  <span class="chip" onclick="chipEstado(this,'nueva-muestra')">Nueva muestra</span>
+                  <span class="chip" onclick="chipEstado(this,'remitida')">Remitida</span>
+                  <span class="chip" onclick="chipEstado(this,'anulado')">Anulado</span>
+                  <span class="chip" style="border-color:#993C1D;color:#993C1D" onclick="chipEstado(this,'duplicados')"><i class="ti ti-copy" style="font-size:10px"></i> Duplicados</span>
+                </div>
+              </div>
+              <div class="filter-row">
+                <span style="font-size:10px;color:var(--text3)">Prueba:</span>
+                <div class="chips" id="chips-prueba">
+                  <span class="chip-prueba active" onclick="chipPrueba(this,'todas')">Todas</span>
+                  <span class="chip-prueba" onclick="chipPrueba(this,'VIH')">VIH</span>
+                  <span class="chip-prueba" onclick="chipPrueba(this,'VPH')">VPH</span>
+                  <span class="chip-prueba" onclick="chipPrueba(this,'HepB')">Hep B</span>
+                  <span class="chip-prueba" onclick="chipPrueba(this,'HepC')">Hep C</span>
+                  <span class="chip-prueba" onclick="chipPrueba(this,'CMV')">CMV</span>
+                  <span class="chip-prueba" onclick="chipPrueba(this,'TB')">Tuberculosis</span>
+                  <span class="chip-prueba" onclick="chipPrueba(this,'HLA')">HLA</span>
+                </div>
+              </div>
+            </div>
+            <div id="af-bar" style="display:none;padding:5px 14px;border-bottom:0.5px solid var(--border);background:var(--bg2)"><div id="af-list"></div></div>
+            <div class="results-info" id="results-info">Cargando...</div>
+            <div style="overflow:auto;max-height:calc(100vh - 280px)">
+              <table>
+                <thead style="position:sticky;top:0;z-index:2;background:var(--surface)"><tr>
+                  <th onclick="sortTable('m-tabla',0)" style="cursor:pointer">OD_ID <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                  <th onclick="sortTable('m-tabla',1)" style="cursor:pointer">Código <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                  <th onclick="sortTable('m-tabla',2)" style="cursor:pointer">Cédula <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                  <th onclick="sortTable('m-tabla',3)" style="cursor:pointer">Paciente <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                  <th onclick="sortTable('m-tabla',4)" style="cursor:pointer">Prueba <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                  <th>Tipo</th>
+                  <th onclick="sortTable('m-tabla',6)" style="cursor:pointer">Sede <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                  <th onclick="sortTable('m-tabla',7)" style="cursor:pointer">F. ingreso <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                  <th onclick="sortTable('m-tabla',8)" style="cursor:pointer">F. recepción <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                  <th onclick="sortTable('m-tabla',9)" style="cursor:pointer">Estado <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                  <th>Gestión pendientes</th>
+                  <th>Gestión pruebas manuales/TB</th>
+                  <th style="width:32px"></th>
+                </tr></thead>
+                <tbody id="m-tabla"><tr><td colspan="12" class="empty-state">Cargando datos...</td></tr></tbody>
+              </table>
+              <div id="m-paginacion" style="padding:8px 14px;border-top:0.5px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /content -->
+
+      <!-- DRAWER -->
+      <div class="overlay" id="ov" onclick="closeD()"></div>
+      <div class="drawer" id="drawer">
+        <div class="drawer-hdr">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500" id="d-title"></div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px" id="d-sub"></div>
+          </div>
+          <button class="btn" style="padding:3px 7px" onclick="closeD()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="drawer-body" id="d-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Config local (NO versionado). Copia js/config.example.js a js/config.js -->
+<script src="js/config.js"></script>
+<!-- Modulos de la app (orden = orden original del archivo monolitico) -->
+<script src="js/supabase-client.js"></script>
+<script src="js/state.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app-init.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/ingresos.js"></script>
+<script src="js/recepcion.js"></script>
+<script src="js/validacion.js"></script>
+<script src="js/reprocesos.js"></script>
+<script src="js/nuevas-muestras.js"></script>
+<script src="js/tablas.js"></script>
+<script src="js/pendientes.js"></script>
+<script src="js/anulados.js"></script>
+<script src="js/todas-las-muestras.js"></script>
+<script src="js/matriculas.js"></script>
+<script src="js/tuberculosis.js"></script>
+<script src="js/sin-ingreso.js"></script>
+<script src="js/modales.js"></script>
+<script src="js/correo.js"></script>
+<script src="js/revision-pendientes.js"></script>
+<script src="js/remisiones.js"></script>
+<script src="js/checklist.js"></script>
+<script src="js/descarte.js"></script>
+<script src="js/estadistica.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
