@@ -270,7 +270,7 @@ function isTB(prueba) {
 }
 
 async function initCierre() {
-  document.getElementById('cierre-fecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('cierre-fecha').value = hoyCO();
   document.getElementById('cierre-ok').style.display = 'none';
   document.getElementById('cierre-resultado').style.display = 'none';
   document.getElementById('cierre-fisico').value = '';

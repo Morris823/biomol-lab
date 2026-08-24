@@ -96,4 +96,8 @@ function excelSerialToUTC(num) {
 const TZ_CO = 'America/Bogota';
 function fmt(dt){if(!dt)return'—';const d=new Date(dt);return d.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:TZ_CO});}
 function fmtHora(dt){if(!dt)return'—';return new Date(dt).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',timeZone:TZ_CO});}
+// Fecha de HOY en hora Colombia (YYYY-MM-DD), sin depender de la zona horaria del
+// computador. Usar SIEMPRE esto en vez de new Date().toISOString().slice(0,10):
+// después de las 7 PM hora Colombia, el slice de UTC devuelve el día siguiente.
+function hoyCO(){ return new Date().toLocaleDateString('en-CA', { timeZone: TZ_CO }); }
 
