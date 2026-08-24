@@ -97,18 +97,3 @@ const TZ_CO = 'America/Bogota';
 function fmt(dt){if(!dt)return'—';const d=new Date(dt);return d.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:TZ_CO});}
 function fmtHora(dt){if(!dt)return'—';return new Date(dt).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',timeZone:TZ_CO});}
 
-// Festivos colombianos — ÚNICA fuente de verdad (antes duplicado en dashboard.js,
-// checklist.js y revision-pendientes.js). Al cambiar un festivo, editar SOLO aquí.
-const FESTIVOS_CO = new Set([
-  // 2025
-  '2025-01-01','2025-01-06','2025-03-24','2025-04-17','2025-04-18',
-  '2025-05-01','2025-06-02','2025-06-23','2025-06-30','2025-07-20',
-  '2025-08-07','2025-08-18','2025-10-13','2025-11-03','2025-11-17',
-  '2025-12-08','2025-12-25',
-  // 2026
-  '2026-01-01','2026-01-12','2026-03-23','2026-04-02','2026-04-03',
-  '2026-05-01','2026-05-18','2026-06-08','2026-06-15','2026-06-29',
-  '2026-07-20','2026-08-07','2026-08-17','2026-10-12','2026-11-02',
-  '2026-11-16','2026-12-08','2026-12-25'
-]);
-

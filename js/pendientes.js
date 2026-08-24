@@ -20,6 +20,8 @@ async function loadPendientesValidar() {
 }
 
 let pvPage = 0;
+let pvOrdenCol = null;
+let pvOrdenAsc = true;
 
 function renderPendientesValidar() {
   const hoy = new Date();
@@ -34,6 +36,36 @@ function renderPendientesValidar() {
       (m.identificacion||'').toLowerCase().includes(q) ||
       (m.sede||'').toLowerCase().includes(q)
     );
+  }
+
+  // Ordenar el array COMPLETO (todas las páginas) antes de paginar
+  if (pvOrdenCol !== null) {
+    const colMap = {0:'nro_muestra',1:'identificacion',2:'paciente',3:null,4:'sede',5:'fecha_recepcion',6:null};
+    const campo = colMap[pvOrdenCol];
+    arr = [...arr]; // no mutar pendientesData
+    if (campo) {
+      arr.sort((a,b) => {
+        const av = (a[campo]||'').toString();
+        const bv = (b[campo]||'').toString();
+        const cmp = av.localeCompare(bv, 'es', { sensitivity: 'base' });
+        return pvOrdenAsc ? cmp : -cmp;
+      });
+    } else if (pvOrdenCol === 3) {
+      // Columna Prueba — se calcula, no es campo directo
+      arr.sort((a,b) => {
+        const av = nombreCorto(a.estudio_nombre, a.estudio_codigo);
+        const bv = nombreCorto(b.estudio_nombre, b.estudio_codigo);
+        const cmp = av.localeCompare(bv, 'es', { sensitivity: 'base' });
+        return pvOrdenAsc ? cmp : -cmp;
+      });
+    } else if (pvOrdenCol === 6) {
+      // Columna Días hábiles — se calcula
+      arr.sort((a,b) => {
+        const da = a.fecha_recepcion ? diasHabilesGlobal(new Date(a.fecha_recepcion).toISOString().slice(0,10), hoyISO) : -1;
+        const db = b.fecha_recepcion ? diasHabilesGlobal(new Date(b.fecha_recepcion).toISOString().slice(0,10), hoyISO) : -1;
+        return pvOrdenAsc ? da - db : db - da;
+      });
+    }
   }
 
   const totalPV = arr.length;
@@ -66,6 +98,9 @@ function renderPendientesValidar() {
   renderPaginacion('pv-paginacion', pvPage, totalPagPV, totalPV, (p) => { pvPage = p; renderPendientesValidar(); });
 }
 
+let pendOrdenCol = null;
+let pendOrdenAsc = true;
+
 function renderPendientes() {
   let arr = pendientesData;
   if (pendFiltro === 'sin') arr = arr.filter(m => !m.gestionada);
@@ -78,6 +113,37 @@ function renderPendientes() {
       (m.sede||'').toLowerCase().includes(pendSearch)
     );
   }
+
+  // Ordenar el array COMPLETO (todas las páginas) antes de paginar
+  if (pendOrdenCol !== null) {
+    arr = [...arr]; // no mutar pendientesData
+    const colMap = {0:'nro_muestra',1:'identificacion',2:'paciente',4:'sede',8:'fecha_gestion'};
+    const campo = colMap[pendOrdenCol];
+    if (campo) {
+      arr.sort((a,b) => {
+        const av = (a[campo]||'').toString();
+        const bv = (b[campo]||'').toString();
+        const cmp = av.localeCompare(bv, 'es', { sensitivity: 'base' });
+        return pendOrdenAsc ? cmp : -cmp;
+      });
+    } else if (pendOrdenCol === 3) {
+      // Columna Prueba — se calcula, no es campo directo
+      arr.sort((a,b) => {
+        const av = nombreCorto(a.estudio_nombre, a.estudio_codigo);
+        const bv = nombreCorto(b.estudio_nombre, b.estudio_codigo);
+        const cmp = av.localeCompare(bv, 'es', { sensitivity: 'base' });
+        return pendOrdenAsc ? cmp : -cmp;
+      });
+    } else if (pendOrdenCol === 5) {
+      // Columna Días — se calcula desde fecha_ingreso
+      arr.sort((a,b) => {
+        const da = Math.floor((Date.now() - new Date(a.fecha_ingreso)) / 86400000);
+        const db = Math.floor((Date.now() - new Date(b.fecha_ingreso)) / 86400000);
+        return pendOrdenAsc ? da - db : db - da;
+      });
+    }
+  }
+
   const totalPend = arr.length;
   const totalPagPend = Math.ceil(totalPend / PAGE_SIZE) || 1;
   if (pendientesPage >= totalPagPend) pendientesPage = totalPagPend - 1;

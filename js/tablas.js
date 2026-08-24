@@ -6,7 +6,7 @@ let muestrasOrdenCol = null;
 let muestrasOrdenAsc = true;
 
 function sortTable(tablaId, colIdx) {
-  // Para m-tabla, ordenar el array completo y repaginar
+  // Para m-tabla y pv-tabla, ordenar el array completo (todas las páginas) y repaginar
   if (tablaId === 'm-tabla') {
     const prev = sortState[tablaId] || {};
     const asc = (prev.col === colIdx) ? !prev.asc : true;
@@ -15,6 +15,26 @@ function sortTable(tablaId, colIdx) {
     muestrasOrdenAsc = asc;
     muestrasPage = 0;
     applyFilters();
+    return;
+  }
+  if (tablaId === 'pv-tabla') {
+    const prev = sortState[tablaId] || {};
+    const asc = (prev.col === colIdx) ? !prev.asc : true;
+    sortState[tablaId] = { col: colIdx, asc };
+    pvOrdenCol = colIdx;
+    pvOrdenAsc = asc;
+    pvPage = 0;
+    renderPendientesValidar();
+    return;
+  }
+  if (tablaId === 'pend-tabla') {
+    const prev = sortState[tablaId] || {};
+    const asc = (prev.col === colIdx) ? !prev.asc : true;
+    sortState[tablaId] = { col: colIdx, asc };
+    pendOrdenCol = colIdx;
+    pendOrdenAsc = asc;
+    pendientesPage = 0;
+    renderPendientes();
     return;
   }
 

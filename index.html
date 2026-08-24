@@ -254,6 +254,18 @@
               <div class="mc"><div class="mc-label">Formato</div><div class="mc-value" style="font-size:13px" id="imp-fmt">—</div></div>
             </div>
           </div>
+
+          <!-- Sedes no reconocidas -->
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-map-pin-exclamation"></i> Sedes sin clasificar</span>
+              <button class="btn" style="margin-left:auto;font-size:11px" onclick="buscarSedesNoReconocidas()"><i class="ti ti-search"></i> Buscar sedes no reconocidas</button>
+            </div>
+            <div style="padding:14px;font-size:11px;color:var(--text2)">
+              Compara todas las sedes que llegaron en ingresos contra el catálogo regional (SEDE_REGIONAL) usado para agrupar por Antioquia/Bogotá/Barranquilla/Cali. Útil para detectar sedes nuevas de LabCore que aún no están mapeadas.
+            </div>
+            <div id="sedes-no-reconocidas-result" style="padding:0 14px 14px"></div>
+          </div>
         </div>
 
         <!-- RECEPCION -->
@@ -1185,7 +1197,7 @@
 
 <!-- Config local (NO versionado). Copia js/config.example.js a js/config.js -->
 <script src="js/config.js"></script>
-<!-- Modulos de la app (orden = orden original del archivo monolitico) -->
+<!-- Módulos de la app (orden = orden original del monolito) -->
 <script src="js/supabase-client.js"></script>
 <script src="js/state.js"></script>
 <script src="js/auth.js"></script>
@@ -1196,12 +1208,12 @@
 <script src="js/recepcion.js"></script>
 <script src="js/validacion.js"></script>
 <script src="js/reprocesos.js"></script>
-<script src="js/nuevas-muestras.js"></script>
 <script src="js/tablas.js"></script>
 <script src="js/pendientes.js"></script>
 <script src="js/anulados.js"></script>
 <script src="js/todas-las-muestras.js"></script>
 <script src="js/matriculas.js"></script>
+<script src="js/sincronizacion.js"></script>
 <script src="js/tuberculosis.js"></script>
 <script src="js/sin-ingreso.js"></script>
 <script src="js/modales.js"></script>
@@ -1211,6 +1223,6 @@
 <script src="js/checklist.js"></script>
 <script src="js/descarte.js"></script>
 <script src="js/estadistica.js"></script>
-<script src="js/main.js"></script>
+<script src="js/sedes.js"></script>
 </body>
 </html>

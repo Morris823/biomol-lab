@@ -334,13 +334,25 @@ function copiarCodigosTB() {
 
 async function cargarHistorialTB() {
   const {data} = await sb.from('corridas_tb')
-    .select('*, corrida_tb_posiciones(count)')
+    .select('*, corrida_tb_posiciones(id, nro_muestra, es_control, estado_muestra)')
     .order('created_at', {ascending:false}).limit(20);
   const rows = data || [];
   document.getElementById('tb-hist-count').textContent = rows.length + ' corridas';
+
+  // Sincronizar y actualizar estado 'cerrada' de la corrida si todo quedó validado
+  for (const r of rows) {
+    await sincronizarEstadoMuestra('corrida_tb_posiciones', r.corrida_tb_posiciones || []);
+    const posSinControl = (r.corrida_tb_posiciones || []).filter(p => !p.es_control);
+    const todasValidadas = posSinControl.length > 0 && posSinControl.every(p => p.estado_muestra === 'validado');
+    if (todasValidadas && r.estado !== 'cerrada') {
+      await sb.from('corridas_tb').update({ estado: 'cerrada' }).eq('id', r.id);
+      r.estado = 'cerrada';
+    }
+  }
+
   document.getElementById('tb-hist-tabla').innerHTML = rows.length
     ? rows.map((r,i) => {
-        const cnt = r.corrida_tb_posiciones?.[0]?.count || 0;
+        const cnt = (r.corrida_tb_posiciones || []).length;
         return `<tr onclick="verCorridaTB('${r.id}')" style="cursor:pointer">
           <td style="font-weight:500;color:var(--text2)">${rows.length-i}</td>
           <td class="mono" style="font-size:11px">${r.corr_id}</td>
@@ -364,6 +376,10 @@ async function cargarHistorialTB() {
 async function verCorridaTB(id) {
   const {data} = await sb.from('corrida_tb_posiciones').select('*').eq('corrida_id', id).order('posicion');
   if (!data) return;
+
+  // Sincronizar contra Supabase — actualiza permanentemente a "validado"
+  await sincronizarEstadoMuestra('corrida_tb_posiciones', data);
+
   document.getElementById('d-title').textContent = 'Detalle corrida TB';
   document.getElementById('d-sub').textContent = data.length + ' muestras (+ posición 1 control)';
   document.getElementById('d-body').innerHTML = `

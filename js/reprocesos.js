@@ -143,15 +143,49 @@ async function loadReprocesos() {
   let all = (reps||[]).map(r=>({...r,tipo:'reproceso'}));
   all.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
 
+  // Sincronizar estado_final permanente contra Supabase (no depende de allMuestras)
+  // Reutiliza el mismo patrón de matrículas/TB: solo actualiza hacia validado/nueva-muestra, nunca revierte
+  const pendientesSync = all.filter(r => r.estado_final !== 'validado' && r.estado_final !== 'nueva-muestra');
+  if (pendientesSync.length) {
+    const nros = [...new Set(pendientesSync.map(r => r.nro_muestra).filter(Boolean))];
+    const odIdsDirectos = pendientesSync.map(r => r.od_id).filter(Boolean);
+
+    const {data: ings} = nros.length
+      ? await sb.from('ingresos').select('od_id,nro_muestra').in('nro_muestra', nros)
+      : { data: [] };
+    const odIdsTodos = [...new Set([...odIdsDirectos, ...(ings||[]).map(i=>i.od_id)])];
+
+    const [{data: vals}, {data: nms}] = await Promise.all([
+      odIdsTodos.length ? sb.from('validaciones').select('od_id').in('od_id', odIdsTodos) : Promise.resolve({data:[]}),
+      odIdsTodos.length ? sb.from('nuevas_muestras').select('od_id').in('od_id', odIdsTodos) : Promise.resolve({data:[]})
+    ]);
+
+    const validadosSet = new Set((vals||[]).map(v=>v.od_id));
+    const nmsSet = new Set((nms||[]).map(n=>n.od_id));
+    const nroToOdId = {};
+    (ings||[]).forEach(i => { nroToOdId[i.nro_muestra] = i.od_id; });
+
+    for (const r of pendientesSync) {
+      const odId = r.od_id || nroToOdId[r.nro_muestra];
+      let nuevoEstado = null;
+      if (odId && validadosSet.has(odId)) nuevoEstado = 'validado';
+      else if (odId && nmsSet.has(odId)) nuevoEstado = 'nueva-muestra';
+      if (nuevoEstado) {
+        await sb.from('reprocesos').update({ estado_final: nuevoEstado }).eq('id', r.id);
+        r.estado_final = nuevoEstado;
+      }
+    }
+  }
+
   // Calcular conteo de reprocesos por nro_muestra
   const conteoRep = {};
   (reps||[]).forEach(r => { conteoRep[r.nro_muestra] = (conteoRep[r.nro_muestra]||0)+1; });
 
-  // Filtrar según pestaña
+  // Filtrar según pestaña — usa estado_final (permanente) primero, allMuestras como respaldo
   if (repFiltro === 'activos') {
     all = all.filter(r => {
+      if (r.estado_final === 'validado' || r.estado_final === 'nueva-muestra') return false;
       const muestra = allMuestras.find(m => m.nro_muestra === r.nro_muestra || m.od_id === r.od_id);
-      // Activo = no está validado ni en nueva-muestra (ambos significan que ya se gestionó)
       if (!muestra) return true;
       return muestra.estado !== 'validado' && muestra.estado !== 'nueva-muestra';
     });
@@ -176,7 +210,8 @@ async function loadReprocesos() {
   document.getElementById('rep-tabla').innerHTML = all.length
     ? all.map(r => {
         const muestra = allMuestras.find(m => m.nro_muestra === r.nro_muestra || m.od_id === r.od_id);
-        const estadoActual = muestra ? muestra.estado : '—';
+        // estado_final permanente tiene prioridad sobre lo que haya (o no) en allMuestras
+        const estadoActual = r.estado_final || (muestra ? muestra.estado : '—');
         const veces = conteoRep[r.nro_muestra] || 1;
         const vecesBadge = veces > 1
           ? `<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:var(--red-bg);color:var(--red);border:0.5px solid var(--red-border);font-weight:600;margin-left:4px">×${veces}</span>`
@@ -197,7 +232,7 @@ async function loadReprocesos() {
           </td>
           <td style="font-size:11px">${r.codigo_motivo} — ${r.desc_motivo||''}</td>
           <td style="font-size:11px;color:var(--text2)">${r.registrado_por}</td>
-          <td>${muestra ? pill(estadoActual) : '<span style="color:var(--text3);font-size:11px">—</span>'}</td>
+          <td>${estadoActual && estadoActual !== '—' ? pill(estadoActual) : '<span style="color:var(--text3);font-size:11px">—</span>'}</td>
           <td onclick="event.stopPropagation()">
             <button class="btn" style="padding:2px 7px;font-size:10px;color:var(--red);border-color:var(--red-border)"
               onclick="eliminarReproceso('${r.id}','${tabla}','${r.nro_muestra}')"
@@ -222,5 +257,57 @@ async function editarPruebaReproceso(id, tabla, nuevaPrueba) {
   const {error} = await sb.from(tabla).update({ estudio_nombre: nuevaPrueba }).eq('id', id);
   if (error) { toast('Error: ' + error.message, 'err'); return; }
   toast(`Prueba actualizada a ${nuevaPrueba}`, 'ok');
+}
+
+// ============================================================
+// NUEVAS MUESTRAS (separado de reprocesos)
+// ============================================================
+async function loadNuevasMuestras() {
+  const {data} = await sb.from('nuevas_muestras').select('*').order('fecha',{ascending:false}).limit(300);
+  let all = data || [];
+
+  const q = (document.getElementById('nm-buscar')?.value || '').trim().toLowerCase();
+  if (q) {
+    all = all.filter(r => {
+      const muestra = allMuestras.find(m => m.nro_muestra === r.nro_muestra || m.od_id === r.od_id);
+      return r.nro_muestra?.toLowerCase().includes(q) ||
+             (muestra?.paciente||'').toLowerCase().includes(q) ||
+             (r.estudio_nombre||'').toLowerCase().includes(q) ||
+             (r.motivo||'').toLowerCase().includes(q);
+    });
+  }
+
+  document.getElementById('nm-count').textContent = all.length + ' registros';
+
+  document.getElementById('nm-tabla').innerHTML = all.length
+    ? all.map(r => {
+        const muestra = allMuestras.find(m => m.nro_muestra === r.nro_muestra || m.od_id === r.od_id);
+        const estadoActual = muestra ? muestra.estado : '—';
+        const pruebaActual = r.estudio_nombre ? nombreCorto(r.estudio_nombre,'') : '';
+        return `<tr>
+          <td class="mono">${fmt(r.fecha)}</td>
+          <td class="mono">${r.nro_muestra}</td>
+          <td onclick="event.stopPropagation()">
+            <select style="font-size:11px;padding:2px 4px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg2)"
+              onchange="editarPruebaReproceso('${r.id}','nuevas_muestras',this.value)">
+              <option value="" disabled ${!pruebaActual?'selected':''}>—</option>
+              ${Object.keys(CONFIG_PRUEBA).filter(k=>k!=='HIV').map(k=>
+                `<option value="${k}" ${k===pruebaActual?'selected':''}>${k}</option>`
+              ).join('')}
+            </select>
+          </td>
+          <td style="font-size:11px">${r.motivo||'—'}</td>
+          <td style="font-size:11px;color:var(--text2)">${r.registrado_por}</td>
+          <td>${muestra ? pill(estadoActual) : '<span style="color:var(--text3);font-size:11px">—</span>'}</td>
+          <td onclick="event.stopPropagation()">
+            <button class="btn" style="padding:2px 7px;font-size:10px;color:var(--red);border-color:var(--red-border)"
+              onclick="eliminarReproceso('${r.id}','nuevas_muestras','${r.nro_muestra}')"
+              title="Eliminar registro">
+              <i class="ti ti-trash"></i>
+            </button>
+          </td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="7" class="empty-state">Sin nuevas muestras registradas</td></tr>';
 }
 

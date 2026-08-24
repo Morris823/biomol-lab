@@ -35,9 +35,9 @@ async function applyFilters(interaccionUsuario = true) {
   const desde = document.getElementById('f-desde').value;
   const hasta = document.getElementById('f-hasta').value;
   const ingreso = document.getElementById('f-ingreso').value;
-  // Filtro por nombre_corto: buscar códigos que correspondan a ese nombre_corto
-  const codsForPrueba = activePrueba === 'todas' ? null :
-    new Set(pruebasData.filter(p => p.nombre_corto === activePrueba).map(p => p.codigo));
+  // Filtro por prueba: usar nombreCorto() directamente (mismo cálculo que se muestra en pantalla)
+  // en vez de depender solo de la tabla pruebasData — así se filtran correctamente muestras
+  // cuyo estudio_codigo no está registrado en pruebasData pero sí se resuelve por texto/fallback
   // Para filtro duplicados: contar tubos reales, no pruebas
   // Un tubo = un nro_muestra único. Varios OD_IDs con mismo nro_muestra = misma muestra, varias pruebas (NO duplicado)
   // Duplicado real = mismo nro_muestra recibido físicamente más de una vez
@@ -65,7 +65,7 @@ async function applyFilters(interaccionUsuario = true) {
     if (activeEstado === 'duplicados') {
       if (!codigosDuplicados.has(m.nro_muestra)) return false;
     } else if (activeEstado !== 'todos' && m.estado !== activeEstado) return false;
-    if (codsForPrueba && !codsForPrueba.has(m.estudio_codigo)) return false;
+    if (activePrueba !== 'todas' && nombreCorto(m.estudio_nombre, m.estudio_codigo) !== activePrueba) return false;
     if (q && ![m.nro_muestra,m.identificacion,m.od_id,(m.paciente||'').toLowerCase(),(m.estudio_nombre||'').toLowerCase(),(m.sede||'').toLowerCase()].some(v=>v&&v.includes(q))) return false;
     const fr = m.fecha_recepcion ? m.fecha_recepcion.slice(0,10) : null;
     const fi = m.fecha_ingreso ? m.fecha_ingreso.slice(0,10) : null;
@@ -179,6 +179,28 @@ async function cambiarEstadoManual(od_id, nuevoEstado, selectEl) {
       importado_por: currentUser + ' (manual)',
       hasta_fecha: fecha_val
     }, {onConflict: 'od_id'});
+  }
+
+  // Si pasa a anulado, registrar en la tabla anulados (sin esto la vista v_muestras
+  // recalcula el estado y vuelve al anterior al recargar, porque no encuentra la fila)
+  if (nuevoEstado === 'anulado') {
+    const motivo = prompt('Motivo de anulación (opcional):') || 'Anulado manualmente desde Todas las muestras';
+    const {error: errAnula} = await sb.from('anulados').upsert({
+      od_id,
+      nro_muestra: m.nro_muestra,
+      motivo_anulacion: motivo,
+      registrado_por: currentUser
+    }, {onConflict: 'od_id'});
+    if (errAnula) {
+      toast('Error al anular: ' + errAnula.message, 'err');
+      selectEl.value = estadoAnterior;
+      return;
+    }
+  }
+
+  // Si se está sacando de anulado hacia otro estado, quitar la fila de anulados
+  if (estadoAnterior === 'anulado' && nuevoEstado !== 'anulado') {
+    await sb.from('anulados').delete().eq('od_id', od_id);
   }
 
   // Auditoría (tabla opcional)
