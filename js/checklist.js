@@ -106,7 +106,7 @@ function getItemsChecklist(fechaISO) {
 }
 
 function initChecklist() {
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = hoyCO();
   document.getElementById('cl-fecha').value = hoy;
   cargarChecklist(hoy);
   cargarHistorialChecklist();
@@ -118,7 +118,7 @@ function cambiarFechaChecklist() {
 }
 
 async function cargarChecklist(fechaISO) {
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = hoyCO();
   const {data} = await sb.from('checklist_turno').select('*').eq('fecha', fechaISO).maybeSingle();
   if (data) {
     checklistActual = data;
@@ -148,7 +148,7 @@ async function cargarSemanalManuales(fechaISO) {
 }
 
 function renderBotonCerrar() {
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = hoyCO();
   const esHoy = checklistActual.fecha === hoy;
   const el = document.getElementById('cl-boton-cerrar-wrap');
   if (!el) return;
@@ -330,7 +330,7 @@ async function cargarHistorialChecklist() {
 // MODAL ENTREGA DE TURNO — se muestra al abrir el gestor por primera vez en el día
 // ============================================================
 async function verificarEntregaTurno() {
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = hoyCO();
   const key = 'entregaShown_' + hoy;
   if (localStorage.getItem(key)) return;
 

@@ -8,7 +8,7 @@ let registrosDescarte = [];
 let notasDescarte = [];
 
 async function initDescarte() {
-  document.getElementById('descarte-fecha-reg').value = new Date().toISOString().slice(0,10);
+  document.getElementById('descarte-fecha-reg').value = hoyCO();
   renderDescarteCards();
   renderDescartePorPrueba();
   await cargarRegistrosDescarte();
@@ -114,7 +114,7 @@ async function guardarRegistroDescarte() {
   });
   if (error) { toast('Error guardando: ' + error.message, 'err'); return; }
 
-  document.getElementById('descarte-fecha-reg').value = new Date().toISOString().slice(0,10);
+  document.getElementById('descarte-fecha-reg').value = hoyCO();
   document.getElementById('descarte-hasta').value = '';
   document.getElementById('descarte-obs-reg').value = '';
   toast('Descarte registrado', 'ok');

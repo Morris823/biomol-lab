@@ -237,7 +237,7 @@ async function procesarSeguimientoPendientes(event, area) {
       const existentesMap = {};
       (existentes||[]).forEach(e => { existentesMap[e.nro_muestra] = e.estado; });
 
-      const hoyISO = new Date().toISOString().slice(0,10);
+      const hoyISO = hoyCO();
       let nuevos = 0, yaExisten = 0, ignorados = 0;
 
       for (const m of muestrasUnicas) {
