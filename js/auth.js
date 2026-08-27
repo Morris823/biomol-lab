@@ -26,6 +26,8 @@ function loginUser() {
 function logout() {
   currentUser = null;
   validadasCargadas = false;
+  validadasSlim = [];
+  validadasSlimCargadas = false;
   allMuestras = [];
   lastMuestrasLoad = 0;
   document.getElementById('user-modal').style.display = 'flex';

@@ -42,13 +42,39 @@ async function initDashboard() {
   // NO cargar validadas automáticamente — solo bajo demanda con el botón "Actualizar estadísticas"
   renderDashboard();
   const banner = document.getElementById('dash-banner-validadas');
-  if (banner) banner.style.display = validadasCargadas ? 'none' : 'flex';
+  if (banner) banner.style.display = (validadasCargadas || validadasSlimCargadas) ? 'none' : 'flex';
+}
+
+let validadasSlim = [];
+let validadasSlimCargadas = false;
+
+// Fetch liviano solo con las 5 columnas que necesita la gráfica de oportunidad —
+// mucho más barato en egress que traer las 19 columnas completas de cada validada
+async function cargarValidadasSlim() {
+  if (validadasSlimCargadas) return;
+  let all = [];
+  let from = 0;
+  const PAGE = 1000;
+  while (true) {
+    const {data, error} = await sb.from('v_muestras')
+      .select('estudio_codigo,estudio_nombre,fecha_recepcion,fecha_validacion,estado')
+      .eq('estado', 'validado')
+      .range(from, from + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  validadasSlim = all;
+  validadasSlimCargadas = true;
 }
 
 async function actualizarEstadisticasCompletas() {
   const btn = document.querySelector('#dash-banner-validadas button');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Cargando...'; }
-  await loadMuestras({ force: true, incluirValidadas: true });
+  // Si ya se cargaron las validadas completas en otra sección (Todas las muestras),
+  // reutilizarlas en vez de volver a pedir datos
+  if (!validadasCargadas) await cargarValidadasSlim();
   renderDashboard();
   const banner = document.getElementById('dash-banner-validadas');
   if (banner) banner.style.display = 'none';
@@ -58,7 +84,11 @@ async function actualizarEstadisticasCompletas() {
 function renderDashboard() {
   const c = {};
   allMuestras.forEach(m => { c[m.estado] = (c[m.estado]||0)+1; });
-  const total = allMuestras.length;
+  // Si las validadas completas no están en allMuestras, usar el conteo liviano
+  if (!validadasCargadas && validadasSlimCargadas) {
+    c.validado = validadasSlim.length;
+  }
+  const total = allMuestras.length + (!validadasCargadas ? (c.validado||0) : 0);
   const recibidas = (c.recibido||0) + (c['sin-validar']||0) + (c.validado||0) + (c.reproceso||0) + (c['nueva-muestra']||0);
   const sinValidar = c['sin-validar']||0;
   const validadas = c.validado||0;
@@ -286,7 +316,12 @@ function renderDashCharts() {
   // Calcular datos de oportunidad por prueba
   const oporData = {};
 
-  allMuestras.forEach(m => {
+  // Usar el array liviano de validadas si allMuestras no las tiene completas
+  const fuenteValidadas = validadasCargadas
+    ? allMuestras.filter(m => m.estado === 'validado')
+    : validadasSlim;
+
+  fuenteValidadas.forEach(m => {
     if (!m.fecha_recepcion || !m.fecha_validacion) return;
     const rec = new Date(m.fecha_recepcion);
     const val = new Date(m.fecha_validacion);

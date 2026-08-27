@@ -90,8 +90,16 @@ function abrirModalIngresoManual(nroPrelleno) {
   // Poblar datalist de sedes
   const dl = document.getElementById('im-sedes-list');
   dl.innerHTML = Object.keys(SEDE_REGIONAL).map(s => `<option value="${s}">`).join('');
-  // Pre-llenar código si viene de Sin ingreso
-  document.getElementById('im-od-id').value = nroPrelleno || '';
+  // Mostrar código de muestra conocido por separado (NO pre-llenar OD_ID con él)
+  const wrapConocido = document.getElementById('im-nro-conocido-wrap');
+  if (nroPrelleno) {
+    document.getElementById('im-nro-conocido').textContent = nroPrelleno;
+    wrapConocido.style.display = 'block';
+  } else {
+    wrapConocido.style.display = 'none';
+  }
+  window._imNroConocido = nroPrelleno || null;
+  document.getElementById('im-od-id').value = '';
   document.getElementById('im-nombres').value = '';
   document.getElementById('im-apellidos').value = '';
   document.getElementById('im-cedula').value = '';
@@ -127,7 +135,14 @@ async function guardarIngresoManual() {
 
   const prueba = pruebasData.find(p => p.codigo === estudio_codigo);
   const estudio_nombre = prueba?.nombre_largo || prueba?.nombre_corto || estudio_codigo;
-  const nro_muestra = od_id; // Para ingresos manuales OD_ID = código
+  // Usar el código de muestra ya conocido (si viene de "Sin ingreso"); solo si no hay
+  // ninguno, se asume que es un ingreso totalmente manual y el OD_ID hace de código también
+  const nro_muestra = window._imNroConocido || od_id;
+
+  if (window._imNroConocido && od_id === window._imNroConocido) {
+    errEl.textContent = 'El OD_ID no puede ser igual al código de muestra — verifica el OD_ID real de LabCore.';
+    errEl.style.display = 'block'; return;
+  }
 
   const btn = document.getElementById('im-btn-guardar');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Guardando...';
@@ -144,7 +159,8 @@ async function guardarIngresoManual() {
     tipo_muestra,
     sede,
     subido_por: currentUser + ' (manual)',
-    fecha_solicitud: new Date().toISOString()
+    fecha_solicitud: new Date().toISOString(),
+    fecha_ingreso: new Date().toISOString()
   });
 
   btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Guardar ingreso';

@@ -19,11 +19,10 @@ async function cargarSegGestionMap(force = false) {
 }
 
 async function applyFilters(interaccionUsuario = true) {
-  // Cargar validadas bajo demanda solo cuando el usuario interactúa explícitamente
-  // (no en la carga inicial de la página, para no consumir egress innecesario)
+  // Cargar validadas SOLO cuando el usuario hace clic explícito en el chip "Validado" o "Todos"
+  // (nunca automáticamente por escribir texto — eso ahora se ofrece como botón si no hay resultados)
   if (interaccionUsuario) {
-    const busquedaTexto = document.getElementById('q-search').value.trim();
-    const necesitaValidadas = activeEstado === 'validado' || activeEstado === 'todos' || busquedaTexto.length > 3;
+    const necesitaValidadas = activeEstado === 'validado' || activeEstado === 'todos';
     if (necesitaValidadas && !validadasCargadas) {
       toast('Cargando historial de validadas...', 'info');
       await loadMuestras({ force: true, incluirValidadas: true });
@@ -100,6 +99,8 @@ async function applyFilters(interaccionUsuario = true) {
     ? `${codigosDuplicados.size} pacientes con tubos duplicados (${totalFiltrado} registros)`
     : `${totalFiltrado} de ${allMuestras.length} muestras`;
 
+  const sinResultadosPorBusqueda = paginada.length === 0 && q.length > 0 && !validadasCargadas;
+
   document.getElementById('m-tabla').innerHTML = paginada.length
     ? paginada.map(m=>`<tr onclick="openD('${m.od_id}')">
         <td class="mono">${m.od_id}</td>
@@ -123,10 +124,25 @@ async function applyFilters(interaccionUsuario = true) {
           </select>
         </td>
       </tr>`).join('')
-    : '<tr><td colspan="11" class="empty-state">Sin resultados para los filtros aplicados</td></tr>';
+    : sinResultadosPorBusqueda
+      ? `<tr><td colspan="11" class="empty-state">
+          <div style="padding:16px;text-align:center">
+            <div style="margin-bottom:10px">No se encontró "<strong>${q}</strong>" entre las muestras activas.</div>
+            <button class="btn btn-primary" style="font-size:12px" onclick="buscarEnValidadas()">
+              <i class="ti ti-search"></i> Buscar también en validadas
+            </button>
+          </div>
+        </td></tr>`
+      : '<tr><td colspan="11" class="empty-state">Sin resultados para los filtros aplicados</td></tr>';
 
   // Controles de paginación
   renderPaginacion('m-paginacion', muestrasPage, totalPaginas, totalFiltrado, (p) => { muestrasPage = p; applyFilters(); });
+}
+
+async function buscarEnValidadas() {
+  toast('Buscando en el historial completo de validadas...', 'info');
+  await loadMuestras({ force: true, incluirValidadas: true });
+  applyFilters();
 }
 
 function chipEstado(el,val){

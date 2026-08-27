@@ -4,14 +4,12 @@
 const PAGE_TITLES = {
   dashboard:'Dashboard', ingresos:'Importar ingresos', recepcion:'Recepción de muestras',
   cierre:'Cierre de turno', validacion:'Importar validados', reprocesos:'Reprocesos',
-  'nueva-muestra':'Nuevas muestras',
   pendientes:'Pendientes y gestionadas', 'sin-ingreso':'Recibidas sin ingreso', anulados:'Anulados',
   muestras:'Todas las muestras', matriculas:'Pruebas manuales — Matrículas',
   tuberculosis:'Tuberculosis — Corridas', correo:'Generar correo',
   'revision-manuales':'Revisión de pendientes — Manuales', 'revision-tb':'Revisión de pendientes — TB',
-  checklist:'Cierre de turno — Bacteriólogos', descarte:'Descarte de muestras', estadistica:'Estadística mensual (equipos)',
-  remisiones:'Remisiones',
-  'pendientes-validar':'Pendientes por validar'
+  checklist:'Cierre de turno — Bacteriólogos', descarte:'Descarte de muestras',
+  remisiones:'Remisiones'
 };
 
 function nav(name, el) {
@@ -25,7 +23,6 @@ function nav(name, el) {
   if (name === 'muestras') applyFilters(false);
   if (name === 'pendientes') loadPendientes();
   if (name === 'reprocesos') loadReprocesos();
-  if (name === 'nueva-muestra') loadNuevasMuestras();
   if (name === 'validacion') loadValHist();
   if (name === 'sin-ingreso') loadSinIngreso();
   if (name === 'anulados') loadAnulados();
@@ -40,6 +37,5 @@ function nav(name, el) {
   if (name === 'estadistica') initEstadistica();
   if (name === 'cierre') initCierre();
   if (name === 'remisiones') initRemisiones();
-  if (name === 'pendientes-validar') loadPendientesValidar();
 }
 
