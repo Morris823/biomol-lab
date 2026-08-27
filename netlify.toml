@@ -1,0 +1,7 @@
+# Configuracion de despliegue en Netlify.
+# El build genera js/config.js desde las variables de entorno SUPA_URL y SUPA_KEY
+# (definidas en Netlify: Site settings -> Environment variables), para que las
+# credenciales nunca esten en el repositorio.
+[build]
+  command = "node scripts/gen-config.js"
+  publish = "."
