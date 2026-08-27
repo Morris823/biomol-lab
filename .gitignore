@@ -1,6 +1,12 @@
 # Credenciales locales de Supabase — NUNCA subir
 js/config.js
 
+# Volcados de datos — llevan datos de pacientes, NUNCA subir
+# (schema.sql SÍ se versiona; los datos NO)
+supabase/data.sql
+supabase/*.dump
+supabase/*_data.sql
+
 # Sistema
 .DS_Store
 Thumbs.db
