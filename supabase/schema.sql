@@ -387,3 +387,25 @@ grant usage on schema public to anon, authenticated, service_role;
 grant all on all tables in schema public to anon, authenticated, service_role;
 grant all on all sequences in schema public to anon, authenticated, service_role;
 grant select on public.v_muestras to anon, authenticated, service_role;
+
+-- ============================================================
+-- ÍNDICES — críticos para el rendimiento de v_muestras y de la app.
+-- Sin ellos, v_muestras hace seq-scans y el SQL Editor da timeout.
+-- (Las columnas UNIQUE y PK ya vienen indexadas; aquí van las demás.)
+-- ============================================================
+-- Join lateral de v_muestras: recepciones más reciente por nro_muestra
+create index if not exists idx_recepciones_nro_fecha on public.recepciones (nro_muestra, fecha_recepcion desc);
+create index if not exists idx_recepciones_fecha on public.recepciones (fecha_recepcion);
+-- Joins de v_muestras por od_id / nro_muestra
+create index if not exists idx_ingresos_nro_muestra on public.ingresos (nro_muestra);
+create index if not exists idx_reprocesos_od_id on public.reprocesos (od_id);
+create index if not exists idx_nuevas_muestras_od_id on public.nuevas_muestras (od_id);
+create index if not exists idx_remision_posiciones_nro_muestra on public.remision_posiciones (nro_muestra);
+-- Lookups por tabla padre (posiciones)
+create index if not exists idx_matricula_posiciones_matricula_id on public.matricula_posiciones (matricula_id);
+create index if not exists idx_corrida_tb_posiciones_corrida_id on public.corrida_tb_posiciones (corrida_id);
+create index if not exists idx_remision_posiciones_remision_id on public.remision_posiciones (remision_id);
+-- Lookups por nro_muestra en posiciones (cargarEnMatriculaGlobal / TB / seguimiento)
+create index if not exists idx_matricula_posiciones_nro on public.matricula_posiciones (nro_muestra);
+create index if not exists idx_corrida_tb_posiciones_nro on public.corrida_tb_posiciones (nro_muestra);
+create index if not exists idx_seguimiento_manuales_nro on public.seguimiento_manuales (nro_muestra);
