@@ -111,9 +111,14 @@
     <div style="font-size:18px;font-weight:600;margin-bottom:4px">BioMol Lab</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:20px">Trazabilidad de muestras de biología molecular</div>
     <div style="font-size:11px;color:var(--text2);margin-bottom:6px">¿Quién eres hoy?</div>
-    <select id="user-picker" style="width:100%;margin-bottom:16px;padding:10px">
+    <select id="user-picker" style="width:100%;margin-bottom:12px;padding:10px">
       <option value="">— Selecciona tu nombre —</option>
     </select>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:6px">PIN</div>
+    <input id="user-pin" type="password" inputmode="numeric" autocomplete="off"
+      placeholder="••••••" maxlength="12"
+      style="width:100%;margin-bottom:16px;padding:10px;letter-spacing:2px"
+      onkeydown="if(event.key==='Enter')loginUser()" />
     <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px" onclick="loginUser()">
       <i class="ti ti-login"></i> Entrar al sistema
     </button>
