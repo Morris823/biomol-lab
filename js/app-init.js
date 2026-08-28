@@ -6,9 +6,19 @@ let pruebasData = [];
 
 async function initApp() {
   await loadPruebas();
-  // Cargar gestiones marcadas para preservarlas en memoria
-  const {data: gest} = await sb.from('gestiones').select('od_id').eq('gestionada', true);
-  if (gest) gest.forEach(g => gestionadasLocal.add(g.od_id));
+  // Cargar gestiones marcadas para preservarlas en memoria.
+  // Paginar: Supabase devuelve máx. 1000 filas por consulta. Sin este loop,
+  // con >1000 gestionadas las que sobran no se cargaban y aparecían como
+  // "sin gestionar" al recargar, aunque en la base sí estuvieran marcadas.
+  let fromG = 0;
+  while (true) {
+    const {data: gest, error} = await sb.from('gestiones')
+      .select('od_id').eq('gestionada', true).range(fromG, fromG + 999);
+    if (error || !gest || gest.length === 0) break;
+    gest.forEach(g => gestionadasLocal.add(g.od_id));
+    if (gest.length < 1000) break;
+    fromG += 1000;
+  }
   await loadMuestras({force:true});
   setupRealtime();
   nav('dashboard', document.querySelector('.nav-item'));
