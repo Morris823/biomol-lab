@@ -6,11 +6,11 @@ let posicionesTB = [];
 let tipoRapidoTB = '';
 
 async function initTB() {
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = hoyCO();
   const {data} = await sb.from('corridas_tb')
     .select('*')
     .eq('estado','abierta')
-    .gte('created_at', hoy + 'T00:00:00')
+    .gte('created_at', hoy + 'T00:00:00-05:00')
     .order('created_at', {ascending:false})
     .limit(1);
   if (data && data.length > 0) {
@@ -37,10 +37,10 @@ async function nuevaCorrridaTB() {
     if (!confirm('Ya hay una corrida abierta. ¿Cerrarla y crear una nueva?')) return;
     await cerrarCorridaTB();
   }
-  const hoy = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const hoy = hoyCO().replace(/-/g,'');
   const {count} = await sb.from('corridas_tb')
     .select('*', {count:'exact', head:true})
-    .gte('created_at', new Date().toISOString().slice(0,10) + 'T00:00:00');
+    .gte('created_at', hoyCO() + 'T00:00:00-05:00');
   const consec = String((count||0) + 1).padStart(3,'0');
   const corrId = `TB-${hoy}-${consec}`;
   const {data, error} = await sb.from('corridas_tb').insert({

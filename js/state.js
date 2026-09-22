@@ -94,7 +94,14 @@ function excelSerialToUTC(num) {
 }
 
 const TZ_CO = 'America/Bogota';
-function fmt(dt){if(!dt)return'—';const d=new Date(dt);return d.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:TZ_CO});}
+function fmt(dt){
+  if(!dt)return'—';
+  // Valor solo-fecha 'YYYY-MM-DD' (columnas tipo date: fecha_descarte, descarto_hasta,
+  // fecha_cierre, revision_fecha, etc.): formatear directo, SIN pasar por new Date(),
+  // que lo interpreta como medianoche UTC y restaría un día en hora Colombia.
+  if(typeof dt==='string' && /^\d{4}-\d{2}-\d{2}$/.test(dt)){const p=dt.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+  const d=new Date(dt);return d.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:TZ_CO});
+}
 function fmtHora(dt){if(!dt)return'—';return new Date(dt).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',timeZone:TZ_CO});}
 // Fecha de HOY en hora Colombia (YYYY-MM-DD), sin depender de la zona horaria del
 // computador. Usar SIEMPRE esto en vez de new Date().toISOString().slice(0,10):

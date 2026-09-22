@@ -65,12 +65,15 @@ async function processScan(val) {
 }
 
 async function loadRecepciones() {
-  // Traer recepciones de HOY desde Supabase
-  const hoy = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+  // Traer recepciones de HOY (día de Colombia) desde Supabase.
+  // hoyCO() da la fecha de Colombia; el offset -05:00 hace que la ventana sea
+  // medianoche-a-medianoche de Colombia, no de UTC (si no, las de la tarde/noche
+  // caían en el día equivocado y descuadraban el conteo del cierre).
+  const hoy = hoyCO(); // YYYY-MM-DD hora Colombia
   const {data, error} = await sb.from('recepciones')
     .select('*')
-    .gte('fecha_recepcion', hoy + 'T00:00:00')
-    .lte('fecha_recepcion', hoy + 'T23:59:59')
+    .gte('fecha_recepcion', hoy + 'T00:00:00-05:00')
+    .lte('fecha_recepcion', hoy + 'T23:59:59-05:00')
     .order('fecha_recepcion', {ascending: false});
   if (error) { toast('Error cargando recepciones: ' + error.message, 'err'); return; }
 

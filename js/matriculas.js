@@ -7,12 +7,12 @@ let posicionesActual = [];    // array de posiciones escaneadas
 const PRUEBAS_MANUALES = ['HLA B27','HLA B57','Homocisteina','Hemocromatosis','MTHFR'];
 
 async function initMatriculas() {
-  // Buscar si hay una matrícula abierta hoy
-  const hoy = new Date().toISOString().slice(0,10);
+  // Buscar si hay una matrícula abierta hoy (día de Colombia)
+  const hoy = hoyCO();
   const {data} = await sb.from('matriculas')
     .select('*')
     .eq('estado','abierta')
-    .gte('created_at', hoy + 'T00:00:00')
+    .gte('created_at', hoy + 'T00:00:00-05:00')
     .order('created_at', {ascending:false})
     .limit(1);
   if (data && data.length > 0) {
@@ -37,11 +37,11 @@ async function nuevaMatricula() {
     if (!confirm('Ya hay una matrícula abierta. ¿Cerrarla y crear una nueva?')) return;
     await cerrarMatricula(matriculaActual.id);
   }
-  const hoy = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const hoy = hoyCO().replace(/-/g,'');
   // Contar matrículas del día para el consecutivo
   const {count} = await sb.from('matriculas')
     .select('*', {count:'exact', head:true})
-    .gte('created_at', new Date().toISOString().slice(0,10) + 'T00:00:00');
+    .gte('created_at', hoyCO() + 'T00:00:00-05:00');
   const consec = String((count||0) + 1).padStart(3,'0');
   const matId = `MAT-${hoy}-${consec}`;
   const {data, error} = await sb.from('matriculas').insert({
