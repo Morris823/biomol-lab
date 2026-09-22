@@ -177,6 +177,15 @@ async function loadReprocesos() {
     }
   }
 
+  // Incluir también las NUEVAS MUESTRAS en el historial. Antes tenían su propia
+  // sección; al quitarla, se muestran aquí como filas tipo "nueva-muestra".
+  const {data: nmRows} = await sb.from('nuevas_muestras').select('*').order('fecha',{ascending:false}).limit(200);
+  (nmRows||[]).forEach(n => all.push({
+    ...n, tipo:'nueva-muestra', tabla:'nuevas_muestras', estado_final:'nueva-muestra',
+    codigo_motivo:'Nueva muestra', desc_motivo: n.motivo || ''
+  }));
+  all.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+
   // Calcular conteo de reprocesos por nro_muestra
   const conteoRep = {};
   (reps||[]).forEach(r => { conteoRep[r.nro_muestra] = (conteoRep[r.nro_muestra]||0)+1; });
@@ -217,7 +226,7 @@ async function loadReprocesos() {
           ? `<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:var(--red-bg);color:var(--red);border:0.5px solid var(--red-border);font-weight:600;margin-left:4px">×${veces}</span>`
           : '';
         const pruebaActual = r.estudio_nombre ? nombreCorto(r.estudio_nombre,'') : '';
-        const tabla = 'reprocesos';
+        const tabla = r.tabla || 'reprocesos';
         return `<tr>
           <td class="mono">${fmt(r.fecha)}</td>
           <td class="mono">${r.nro_muestra}${vecesBadge}</td>
