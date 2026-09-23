@@ -19,13 +19,16 @@ async function cargarSegGestionMap(force = false) {
 }
 
 async function applyFilters(interaccionUsuario = true) {
-  // Cargar validadas SOLO cuando el usuario hace clic explícito en el chip "Validado" o "Todos"
-  // (nunca automáticamente por escribir texto — eso ahora se ofrece como botón si no hay resultados)
+  // Cargar validadas es la ÚLTIMA opción (consume egress): SIEMPRE preguntar antes,
+  // nunca cargarlas automáticamente.
   if (interaccionUsuario) {
     const necesitaValidadas = activeEstado === 'validado' || activeEstado === 'todos';
     if (necesitaValidadas && !validadasCargadas) {
-      toast('Cargando historial de validadas...', 'info');
-      await loadMuestras({ force: true, incluirValidadas: true });
+      const ok = confirm('¿Cargar también el historial de muestras VALIDADAS?\n\n⚠ Consume bastantes datos (egress). Hazlo solo si de verdad necesitas ver las validadas.\n\nAceptar = cargar validadas · Cancelar = ver solo las muestras activas.');
+      if (ok) {
+        toast('Cargando historial de validadas...', 'info');
+        await loadMuestras({ force: true, incluirValidadas: true });
+      }
     }
   }
 
