@@ -87,6 +87,28 @@ function renderSegTabla(area) {
     });
   }
 
+  // Orden por prioridad de gestión (lo que más necesita atención, arriba):
+  //  1) estado: pendiente arriba, gestionado al fondo (validado al final)
+  //  2) no recibidas arriba, recibidas abajo
+  //  3) sin observación arriba, con observación abajo
+  //  4) menor tiempo (días) arriba, mayor abajo; sin fecha va arriba
+  // Usa la MISMA cuenta de días que se muestra en la columna (mismo fechaRef/hoyISO).
+  const estadoRank = e => e === 'pendiente' ? 0 : e === 'gestionado' ? 1 : e === 'validado' ? 2 : 3;
+  const deco = rows.map(r => {
+    const muestra = allMuestras.find(m => m.nro_muestra === r.nro_muestra);
+    const fechaRef = muestra?.fecha_recepcion || muestra?.fecha_ingreso;
+    const dias = fechaRef ? diasHabilesGlobal(new Date(fechaRef).toISOString().slice(0,10), hoyISO) : null;
+    return {
+      r,
+      est: estadoRank(r.estado),
+      rec: muestra?.fecha_recepcion ? 1 : 0,                  // no recibida (0) arriba
+      obs: (r.observacion && r.observacion.trim()) ? 1 : 0,   // sin observación (0) arriba
+      dias: dias === null ? -Infinity : dias                  // sin fecha arriba; menor arriba
+    };
+  });
+  deco.sort((a,b) => a.est - b.est || a.rec - b.rec || a.obs - b.obs || a.dias - b.dias);
+  rows = deco.map(d => d.r);
+
   const countEl = document.getElementById(`seg-count-label-${area}`);
   const ultimaBusqueda = segRows[area].length ? segRows[area].reduce((a,b) => new Date(b.busqueda_hasta||0) > new Date(a.busqueda_hasta||0) ? b : a, segRows[area][0]) : null;
   if (countEl) {
