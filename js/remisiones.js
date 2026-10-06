@@ -70,7 +70,7 @@ function renderRemisionActiva() {
   document.getElementById('rem-escaneo-body').innerHTML = `
     <div style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--text2);margin-bottom:6px">
-        <i class="ti ti-info-circle"></i> Escanea el tubo — registro automático, sin ventanas emergentes. La edad se agrega al final.
+        <i class="ti ti-info-circle"></i> Escanea el tubo — registro automático, sin ventanas emergentes. Si no tiene ingreso en el sistema se agrega igual y todas las casillas de la fila se pueden llenar a mano.
       </div>
       <div class="scan-input-row">
         <i class="ti ti-barcode"></i>
@@ -97,9 +97,16 @@ function renderRemisionActiva() {
                     style="width:60px;font-size:11px;padding:2px 4px;text-align:center"
                     onblur="actualizarCampoRemision('${p.id}','codigo_colcan',this.value)" />
                 </td>
-                <td style="font-size:11px">${nombreCompletoColcan(p.codigo_colcan) || nombreCorto(p.estudio_nombre,'') || '—'}</td>
+                <td onclick="event.stopPropagation()">
+                  <select style="width:118px;font-size:11px;padding:2px 4px"
+                    onchange="actualizarPruebaRemision('${p.id}',this.value)">${opcionesPruebaRemision(p)}</select>
+                </td>
                 <td class="mono">${p.nro_muestra}${p.od_id ? '' : ' <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:var(--yellow-bg);color:var(--yellow);border:0.5px solid var(--yellow-border)">sin ingreso</span>'}</td>
-                <td style="font-size:10px;color:var(--text2)">${p.observacion||'—'}</td>
+                <td onclick="event.stopPropagation()">
+                  <input value="${(p.observacion||'').replace(/"/g,'&quot;')}" placeholder="—"
+                    style="width:150px;font-size:10px;padding:2px 4px"
+                    onblur="actualizarCampoRemision('${p.id}','observacion',this.value)" />
+                </td>
                 <td onclick="event.stopPropagation()">
                   <input class="mono" value="${(p.identificacion||'').replace(/"/g,'&quot;')}" placeholder="—"
                     style="width:90px;font-size:11px;padding:2px 4px"
@@ -144,6 +151,54 @@ async function actualizarEdadRemision(id, edad) {
   await sb.from('remision_posiciones').update({ edad: edadNum }).eq('id', id);
   const p = posicionesRemision.find(x => x.id === id);
   if (p) p.edad = edadNum;
+}
+
+// Opciones del selector de prueba de una posición de remisión. Se arma con las
+// pruebas activas del laboratorio (sin repetir nombre corto). Si la posición ya
+// trae un nombre de estudio que no corresponde a ninguna, se conserva como opción
+// para no perder lo que vino de LabCore.
+function opcionesPruebaRemision(p) {
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  const vistos = new Set();
+  const lista = [];
+  for (const x of pruebasData) {
+    const corto = x.nombre_corto || x.codigo;
+    if (vistos.has(corto)) continue;
+    vistos.add(corto);
+    lista.push({codigo: x.codigo, corto, largo: x.nombre_largo || x.nombre_corto || x.codigo});
+  }
+  const cortoActual = p.estudio_nombre ? nombreCorto(p.estudio_nombre, '') : '';
+  const hayMatch = cortoActual && vistos.has(cortoActual);
+  let html = `<option value=""${p.estudio_nombre ? '' : ' selected'}>— prueba —</option>`;
+  if (p.estudio_nombre && !hayMatch) {
+    // Nombre que no está en el catálogo: se muestra tal cual y no se toca al guardar
+    html += `<option value="__actual__" selected title="${esc(p.estudio_nombre)}">${esc(cortoActual || p.estudio_nombre)}</option>`;
+  }
+  html += lista.map(o =>
+    `<option value="${esc(o.codigo)}"${hayMatch && o.corto === cortoActual ? ' selected' : ''} title="${esc(o.largo)}">${esc(o.corto)}</option>`
+  ).join('');
+  return html;
+}
+
+// Cambia la prueba de una posición de remisión (para las muestras sin ingreso en
+// el sistema, donde todos los datos se llenan a mano).
+async function actualizarPruebaRemision(id, codigo) {
+  if (codigo === '__actual__') return;   // dejó el nombre original de LabCore
+  const p = posicionesRemision.find(x => x.id === id);
+  if (!p) return;
+  const pr = codigo ? pruebasData.find(x => x.codigo === codigo) : null;
+  const upd = { estudio_nombre: pr ? (pr.nombre_largo || pr.nombre_corto || pr.codigo) : null };
+  // Mismo criterio que el escaneo: MTHFR/Homocisteína → 0118, Hemocromatosis → 0146.
+  // Solo se autocompleta si la casilla de Colcan está vacía, para no pisar lo escrito.
+  if (!p.codigo_colcan && pr) {
+    const corto = pr.nombre_corto || nombreCorto(upd.estudio_nombre, '');
+    if (corto === 'MTHFR' || corto === 'Homocist.') upd.codigo_colcan = '0118';
+    else if (corto === 'Hemocr.') upd.codigo_colcan = '0146';
+  }
+  const {error} = await sb.from('remision_posiciones').update(upd).eq('id', id);
+  if (error) { toast('Error: ' + error.message, 'err'); return; }
+  Object.assign(p, upd);
+  renderRemisionActiva();
 }
 
 function nombreCompletoColcan(codigoColcan) {
@@ -273,7 +328,7 @@ async function procesarScanRemision(codigo) {
   } else {
     fb.className = 'scan-fb sf-dup';
     fb.innerHTML = `<i class="ti ti-alert-triangle"></i> <strong>${codigo}</strong> agregada — <strong>sin ingreso en el sistema</strong><br>
-      <span style="font-size:11px">Completa los datos (código Colcan, cédula, apellidos, nombres y edad) directamente en la tabla.</span>`;
+      <span style="font-size:11px">Completa los datos a mano en la tabla: prueba, código Colcan, observación, cédula, apellidos, nombres y edad.</span>`;
   }
   renderRemisionActiva();
 }
@@ -281,7 +336,7 @@ async function procesarScanRemision(codigo) {
 // Actualiza un campo editable de una posición de remisión (para las que se
 // escanearon sin ingreso en el sistema y se llenan a mano).
 async function actualizarCampoRemision(id, campo, valor) {
-  const PERMITIDOS = ['codigo_colcan','identificacion','apellidos','nombres','estudio_nombre'];
+  const PERMITIDOS = ['codigo_colcan','identificacion','apellidos','nombres','estudio_nombre','observacion'];
   if (!PERMITIDOS.includes(campo)) return;
   const v = (valor || '').trim() || null;
   const {error} = await sb.from('remision_posiciones').update({ [campo]: v }).eq('id', id);
