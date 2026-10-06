@@ -91,14 +91,30 @@ function renderRemisionActiva() {
         </thead>
         <tbody id="rem-tbody">
           ${posicionesRemision.length
-            ? posicionesRemision.map(p => `<tr>
-                <td class="mono" style="text-align:center">${p.codigo_colcan||'—'}</td>
+            ? posicionesRemision.map(p => `<tr${p.od_id ? '' : ' style="background:var(--yellow-bg)"'}>
+                <td style="text-align:center" onclick="event.stopPropagation()">
+                  <input class="mono" value="${(p.codigo_colcan||'').replace(/"/g,'&quot;')}" placeholder="—"
+                    style="width:60px;font-size:11px;padding:2px 4px;text-align:center"
+                    onblur="actualizarCampoRemision('${p.id}','codigo_colcan',this.value)" />
+                </td>
                 <td style="font-size:11px">${nombreCompletoColcan(p.codigo_colcan) || nombreCorto(p.estudio_nombre,'') || '—'}</td>
-                <td class="mono">${p.nro_muestra}</td>
+                <td class="mono">${p.nro_muestra}${p.od_id ? '' : ' <span style="font-size:9px;padding:1px 5px;border-radius:8px;background:var(--yellow-bg);color:var(--yellow);border:0.5px solid var(--yellow-border)">sin ingreso</span>'}</td>
                 <td style="font-size:10px;color:var(--text2)">${p.observacion||'—'}</td>
-                <td class="mono">${p.identificacion||'—'}</td>
-                <td style="font-size:11px">${p.apellidos||'—'}</td>
-                <td style="font-size:11px">${p.nombres||'—'}</td>
+                <td onclick="event.stopPropagation()">
+                  <input class="mono" value="${(p.identificacion||'').replace(/"/g,'&quot;')}" placeholder="—"
+                    style="width:90px;font-size:11px;padding:2px 4px"
+                    onblur="actualizarCampoRemision('${p.id}','identificacion',this.value)" />
+                </td>
+                <td onclick="event.stopPropagation()">
+                  <input value="${(p.apellidos||'').replace(/"/g,'&quot;')}" placeholder="—"
+                    style="width:110px;font-size:11px;padding:2px 4px"
+                    onblur="actualizarCampoRemision('${p.id}','apellidos',this.value)" />
+                </td>
+                <td onclick="event.stopPropagation()">
+                  <input value="${(p.nombres||'').replace(/"/g,'&quot;')}" placeholder="—"
+                    style="width:110px;font-size:11px;padding:2px 4px"
+                    onblur="actualizarCampoRemision('${p.id}','nombres',this.value)" />
+                </td>
                 <td>
                   <input type="number" value="${p.edad ?? ''}" placeholder="—"
                     style="width:55px;font-size:11px;padding:2px 4px;text-align:center"
@@ -222,39 +238,56 @@ async function procesarScanRemision(codigo) {
   }
 
   const muestra = allMuestras.find(m => m.nro_muestra === codigo);
-  if (!muestra) {
-    fb.className = 'scan-fb sf-dup';
-    fb.innerHTML = `<i class="ti ti-alert-circle"></i> Código <strong>${codigo}</strong> no encontrado en el sistema`;
-    setTimeout(() => document.getElementById('rem-scan-in').focus(), 50);
-    return;
-  }
+  // Si NO hay ingreso en el sistema, igual se agrega la posición: los datos
+  // que falten se llenan a mano en la tabla (campos editables).
 
   // Observación siempre es fija
   const OBS_FIJA = 'Sangre Total en Refrigeracion  5-8°C';
 
-  // Código Colcan según la prueba
-  const prueba = nombreCorto(muestra.estudio_nombre, muestra.estudio_codigo);
+  // Código Colcan según la prueba (solo si conocemos la muestra)
   let codigoColcan = '';
-  if (prueba === 'MTHFR' || prueba === 'Homocist.') codigoColcan = '0118';
-  else if (prueba === 'Hemocr.') codigoColcan = '0146';
+  if (muestra) {
+    const prueba = nombreCorto(muestra.estudio_nombre, muestra.estudio_codigo);
+    if (prueba === 'MTHFR' || prueba === 'Homocist.') codigoColcan = '0118';
+    else if (prueba === 'Hemocr.') codigoColcan = '0146';
+  }
 
   const {data, error} = await sb.from('remision_posiciones').insert({
     remision_id: remisionActual.id,
     nro_muestra: codigo,
-    od_id: muestra.od_id,
-    estudio_nombre: muestra.estudio_nombre,
+    od_id: muestra ? muestra.od_id : null,
+    estudio_nombre: muestra ? muestra.estudio_nombre : null,
     observacion: OBS_FIJA,
     codigo_colcan: codigoColcan,
-    identificacion: muestra.identificacion,
-    apellidos: muestra.apellidos,
-    nombres: muestra.nombres
+    identificacion: muestra ? muestra.identificacion : null,
+    apellidos: muestra ? muestra.apellidos : null,
+    nombres: muestra ? muestra.nombres : null
   }).select().single();
 
   if (error) { toast('Error: ' + error.message, 'err'); return; }
 
   posicionesRemision.push(data);
-  fb.className = 'scan-fb sf-ok';
-  fb.innerHTML = `<i class="ti ti-circle-check"></i> <strong>${muestra.paciente||codigo}</strong> agregada a la remisión`;
+  if (muestra) {
+    fb.className = 'scan-fb sf-ok';
+    fb.innerHTML = `<i class="ti ti-circle-check"></i> <strong>${muestra.paciente||codigo}</strong> agregada a la remisión`;
+  } else {
+    fb.className = 'scan-fb sf-dup';
+    fb.innerHTML = `<i class="ti ti-alert-triangle"></i> <strong>${codigo}</strong> agregada — <strong>sin ingreso en el sistema</strong><br>
+      <span style="font-size:11px">Completa los datos (código Colcan, cédula, apellidos, nombres y edad) directamente en la tabla.</span>`;
+  }
+  renderRemisionActiva();
+}
+
+// Actualiza un campo editable de una posición de remisión (para las que se
+// escanearon sin ingreso en el sistema y se llenan a mano).
+async function actualizarCampoRemision(id, campo, valor) {
+  const PERMITIDOS = ['codigo_colcan','identificacion','apellidos','nombres','estudio_nombre'];
+  if (!PERMITIDOS.includes(campo)) return;
+  const v = (valor || '').trim() || null;
+  const {error} = await sb.from('remision_posiciones').update({ [campo]: v }).eq('id', id);
+  if (error) { toast('Error: ' + error.message, 'err'); return; }
+  const p = posicionesRemision.find(x => x.id === id);
+  if (p) p[campo] = v;
   renderRemisionActiva();
 }
 

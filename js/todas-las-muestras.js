@@ -279,9 +279,41 @@ function openD(od_id) {
       <div style="flex:1;padding-bottom:8px">
         <div style="font-size:11px">${h.e}</div>
         <div style="font-size:10px;color:var(--text3)">${h.t}</div>
-      </div></div>`).join('')}`;
+      </div></div>`).join('')}
+    <div id="d-acciones" style="margin-top:14px"></div>`;
   document.getElementById('ov').classList.add('open');
   document.getElementById('drawer').classList.add('open');
+  mostrarAccionesDrawer(od_id, m.nro_muestra);
+}
+
+// Acciones extra del drawer. El boton de eliminar SOLO aparece si el ingreso se
+// creo manualmente (subido_por contiene 'manual'). Los ingresos que vienen de
+// LabCore no se pueden borrar desde aqui.
+async function mostrarAccionesDrawer(od_id, nro_muestra) {
+  const cont = document.getElementById('d-acciones');
+  if (!cont) return;
+  const {data} = await sb.from('ingresos').select('subido_por').eq('od_id', od_id).maybeSingle();
+  if (!data || !(data.subido_por||'').toLowerCase().includes('manual')) return;
+  cont.innerHTML = `<button class="btn" style="width:100%;justify-content:center;color:var(--red);border-color:var(--red-border)"
+      onclick="eliminarIngresoManual('${od_id}','${(nro_muestra||'').replace(/'/g,"\\'")}')">
+      <i class="ti ti-trash"></i> Eliminar este ingreso manual</button>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px;text-align:center">Solo disponible para ingresos creados manualmente</div>`;
+}
+
+async function eliminarIngresoManual(od_id, nro_muestra) {
+  if (!confirm(`¿Eliminar el ingreso manual de la muestra ${nro_muestra}?\n\nEsta acción no se puede deshacer.`)) return;
+  // Verificacion de seguridad: nunca borrar un ingreso que vino de LabCore
+  const {data} = await sb.from('ingresos').select('subido_por').eq('od_id', od_id).maybeSingle();
+  if (!data || !(data.subido_por||'').toLowerCase().includes('manual')) {
+    toast('Solo se pueden eliminar ingresos creados manualmente', 'err');
+    return;
+  }
+  const {error} = await sb.from('ingresos').delete().eq('od_id', od_id);
+  if (error) { toast('Error: ' + error.message, 'err'); return; }
+  toast('Ingreso manual eliminado', 'ok');
+  closeD();
+  await loadMuestras({force:true});
+  applyFilters(false);
 }
 function closeD(){
   document.getElementById('ov').classList.remove('open');
