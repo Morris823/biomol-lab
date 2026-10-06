@@ -227,7 +227,12 @@ Supabase free tier tiene límite de **5GB/mes de egress**. El proyecto ya super�
 
 ## Filtros de negocio específicos (no evidentes, no perder al modificar)
 
-1. **Importador de ingresos excluye automáticamente** VIH carga viral y VPH/Papiloma (códigos LabCore `1000107, 1009395, 1011771, 1002198, 1000165`) de 57 sedes fuera de Antioquia — error recurrente de LabCore que enviaba muestras de otras regionales al área. **Nunca excluir Genotipificación de VIH**, que sí pertenece al área aunque tenga "VIH" en el nombre. (`js/ingresos.js`)
+1. **Importador de ingresos excluye automáticamente** (`js/ingresos.js`, `CODIGOS_EXCLUIR_OTRA_REGIONAL`) las muestras que llegan por error de LabCore desde sedes de **otras regionales** (catálogo `SEDE_REGIONAL` en `js/sin-ingreso.js`):
+   - **Se excluyen** si la sede es de otra regional: `1000165` (VIH carga viral), `1011771` (TAMIZAJE ADN-PVH + CITOLOGIA VAGINAL), `1009395` (TAMIZAJE ADN-PVH + CCU LÍQUIDA), `1002198` (VPH).
+   - **NUNCA se excluye `1000107`** (PAPILOMAVIRUS (PVH) POR PCR), aunque venga de otra regional: por ese código llegan las muestras de **base líquida** que sí se procesan en Medellín. **No se pueden distinguir por datos** — solo por el envase físico — por eso se dejan entrar todas y el laboratorio descarta las que no son al recibirlas.
+   - **Nunca excluir Genotipificación de VIH** (`1001882`), que sí pertenece al área aunque tenga "VIH" en el nombre.
+   - Las **sedes desconocidas** (no catalogadas en `SEDE_REGIONAL`) **sí entran**: pueden ser sedes nuevas de Antioquia. Quedan visibles en la sección "Sedes no reconocidas" para catalogarlas.
+   - Al terminar la importación, el toast informa cuántas se omitieron.
 2. **TB nunca se numera físicamente** — se excluye del conteo de tubos del cierre de turno de recepción. La posición 1 de cada corrida TB es siempre control de equipo. (`js/tuberculosis.js`, `js/recepcion.js`)
 3. **Validaciones cruzan por `od_id`**, nunca por `nro_muestra` — un mismo tubo puede tener múltiples pruebas (múltiples `od_id`), cada una se valida independientemente.
 4. **Duplicado real** = mismo `nro_muestra` escaneado más de una vez en `recepciones` (excluyendo TB). Múltiples `od_id` con el mismo `nro_muestra` (varias pruebas en un tubo) NO es duplicado.

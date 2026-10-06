@@ -19,11 +19,39 @@ async function processIngresosFile(file) {
   const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
   setImpProgress(30, 'Detectando formato...');
   const normalized = rows.map(r => detectAndNormalize(r)).filter(Boolean);
-  setImpProgress(60, `Formato detectado. Insertando ${normalized.length} registros...`);
+
+  // ---- Filtro: muestras que NO son del área y llegan por error de LabCore ----
+  // Se excluyen VIH y ciertos VPH cuando vienen de sedes de OTRA regional.
+  // IMPORTANTE: 1000107 (PAPILOMAVIRUS POR PCR) NUNCA se excluye — por ese código
+  // llegan las de BASE LÍQUIDA de otras regionales que SÍ se procesan aquí, y no
+  // se pueden distinguir por datos (solo por el envase físico).
+  // Genotipificación de VIH (1001882) tampoco se toca: sí pertenece al área.
+  const CODIGOS_EXCLUIR_OTRA_REGIONAL = new Set([
+    '1000165', // VIH carga viral
+    '1011771', // TAMIZAJE ADN-PVH POR PCR + CITOLOGIA VAGINAL
+    '1009395', // TAMIZAJE ADN-PVH POR PCR + CCU LÍQUIDA
+    '1002198', // VPH
+  ]);
+  const excluidas = [];
+  const paraInsertar = normalized.filter(r => {
+    const reg = getRegional(r.sede);
+    // Solo excluye si la sede está catalogada en OTRA regional. Las sedes
+    // desconocidas ('—') pasan (pueden ser nuevas de Antioquia) y quedan
+    // visibles en "Sedes no reconocidas" para catalogarlas.
+    const esOtraRegional = reg !== 'Antioquia' && reg !== '—';
+    if (esOtraRegional && CODIGOS_EXCLUIR_OTRA_REGIONAL.has(String(r.estudio_codigo))) {
+      excluidas.push(r);
+      return false;
+    }
+    return true;
+  });
+  if (excluidas.length) console.table(excluidas.map(r => ({nro_muestra:r.nro_muestra, sede:r.sede, codigo:r.estudio_codigo, estudio:r.estudio_nombre})));
+
+  setImpProgress(60, `Formato detectado. Insertando ${paraInsertar.length} registros...`);
   let nuevos = 0, dups = 0;
   const BATCH = 50;
-  for (let i = 0; i < normalized.length; i += BATCH) {
-    const batch = normalized.slice(i, i+BATCH);
+  for (let i = 0; i < paraInsertar.length; i += BATCH) {
+    const batch = paraInsertar.slice(i, i+BATCH);
     const ods = batch.map(r => r.od_id);
     const {data: existing} = await sb.from("ingresos").select("od_id").in("od_id", ods);
     const existingSet = new Set((existing||[]).map(r=>r.od_id));
@@ -38,7 +66,7 @@ async function processIngresosFile(file) {
       if (error) { console.error("Error batch:", error); toast("Error: "+error.message,"err"); }
       else nuevos += toInsert.length;
     }
-    setImpProgress(60 + Math.round(((i+BATCH)/normalized.length)*35), `Insertando... ${Math.min(i+BATCH,normalized.length)}/${normalized.length}`);
+    setImpProgress(60 + Math.round(((i+BATCH)/paraInsertar.length)*35), `Insertando... ${Math.min(i+BATCH,paraInsertar.length)}/${paraInsertar.length}`);
   }
   setImpProgress(100, '¡Importación completada!');
   document.getElementById('imp-total').textContent = rows.length;
@@ -49,9 +77,10 @@ async function processIngresosFile(file) {
   await loadMuestras({force:true});
 
   // Buscar recepciones sin ingreso que ahora sí tienen ingreso y actualizarlas
-  await reconciliarSinIngreso(normalized.map(r => r.nro_muestra));
+  await reconciliarSinIngreso(paraInsertar.map(r => r.nro_muestra));
 
-  toast(`${nuevos} ingresos importados`, 'ok');
+  toast(`${nuevos} ingresos importados` +
+        (excluidas.length ? ` · ${excluidas.length} omitidos (VIH/VPH de otras regionales)` : ''), 'ok');
 }
 
 async function reconciliarSinIngreso(nrosImportados) {
