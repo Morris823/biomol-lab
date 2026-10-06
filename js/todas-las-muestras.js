@@ -310,6 +310,11 @@ async function eliminarIngresoManual(od_id, nro_muestra) {
   }
   const {error} = await sb.from('ingresos').delete().eq('od_id', od_id);
   if (error) { toast('Error: ' + error.message, 'err'); return; }
+  // Limpiar rastros por od_id para que, si lo vuelven a crear con el mismo código,
+  // no aparezca validado o gestionado por datos viejos. La recepción NO se borra:
+  // el tubo sí llegó físicamente.
+  await sb.from('validaciones').delete().eq('od_id', od_id);
+  await sb.from('gestiones').delete().eq('od_id', od_id);
   toast('Ingreso manual eliminado', 'ok');
   closeD();
   await loadMuestras({force:true});

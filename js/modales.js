@@ -90,15 +90,9 @@ function abrirModalIngresoManual(nroPrelleno) {
   // Poblar datalist de sedes
   const dl = document.getElementById('im-sedes-list');
   dl.innerHTML = Object.keys(SEDE_REGIONAL).map(s => `<option value="${s}">`).join('');
-  // Mostrar código de muestra conocido por separado (NO pre-llenar OD_ID con él)
-  const wrapConocido = document.getElementById('im-nro-conocido-wrap');
-  if (nroPrelleno) {
-    document.getElementById('im-nro-conocido').textContent = nroPrelleno;
-    wrapConocido.style.display = 'block';
-  } else {
-    wrapConocido.style.display = 'none';
-  }
-  window._imNroConocido = nroPrelleno || null;
+  // El código de muestra de LabCore es el campo obligatorio. Si viene de un escaneo
+  // en recepción ("Sin ingreso"), llega pre-lleno.
+  document.getElementById('im-nro-muestra').value = nroPrelleno || '';
   document.getElementById('im-od-id').value = '';
   document.getElementById('im-nombres').value = '';
   document.getElementById('im-apellidos').value = '';
@@ -109,7 +103,7 @@ function abrirModalIngresoManual(nroPrelleno) {
   const m = document.getElementById('modal-ingreso-manual');
   m.style.display = 'flex';
   m.style.pointerEvents = 'auto';
-  setTimeout(() => document.getElementById('im-od-id').focus(), 100);
+  setTimeout(() => document.getElementById(nroPrelleno ? 'im-nombres' : 'im-nro-muestra').focus(), 100);
 }
 function cerrarModalIngresoManual() {
   const m = document.getElementById('modal-ingreso-manual');
@@ -119,7 +113,8 @@ function cerrarModalIngresoManual() {
 function imActualizarNombreEstudio() {}
 
 async function guardarIngresoManual() {
-  const od_id = document.getElementById('im-od-id').value.trim();
+  const nro_muestra = document.getElementById('im-nro-muestra').value.trim();
+  const od_id_input = document.getElementById('im-od-id').value.trim();
   const estudio_codigo = document.getElementById('im-estudio-codigo').value;
   const nombres = document.getElementById('im-nombres').value.trim();
   const apellidos = document.getElementById('im-apellidos').value.trim();
@@ -128,24 +123,30 @@ async function guardarIngresoManual() {
   const sede = document.getElementById('im-sede').value.trim();
   const errEl = document.getElementById('im-error');
 
-  if (!od_id || !estudio_codigo || !nombres || !apellidos || !cedula) {
-    errEl.textContent = 'Completa los campos obligatorios: OD_ID, prueba, nombres, apellidos y cédula.';
+  if (!nro_muestra || !estudio_codigo || !nombres || !apellidos || !cedula) {
+    errEl.textContent = 'Completa los campos obligatorios: código de muestra de LabCore, prueba, nombres, apellidos y cédula.';
     errEl.style.display = 'block'; return;
   }
 
   const prueba = pruebasData.find(p => p.codigo === estudio_codigo);
   const estudio_nombre = prueba?.nombre_largo || prueba?.nombre_corto || estudio_codigo;
-  // Usar el código de muestra ya conocido (si viene de "Sin ingreso"); solo si no hay
-  // ninguno, se asume que es un ingreso totalmente manual y el OD_ID hace de código también
-  const nro_muestra = window._imNroConocido || od_id;
 
-  if (window._imNroConocido && od_id === window._imNroConocido) {
-    errEl.textContent = 'El OD_ID no puede ser igual al código de muestra — verifica el OD_ID real de LabCore.';
-    errEl.style.display = 'block'; return;
-  }
+  // El OD_ID es opcional en los ingresos manuales: lo importante es el código de
+  // muestra de LabCore, que es con el que se cruzan los validados. Si no lo escriben,
+  // se genera un identificador interno MAN-<código> para cumplir la llave primaria.
+  const od_id = od_id_input || ('MAN-' + nro_muestra);
 
   const btn = document.getElementById('im-btn-guardar');
   btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Guardando...';
+
+  // Evitar duplicar un ingreso que ya existe con ese código de muestra
+  const {data: yaExiste} = await sb.from('ingresos')
+    .select('od_id,estudio_codigo').eq('nro_muestra', nro_muestra).limit(20);
+  if ((yaExiste || []).some(r => r.estudio_codigo === estudio_codigo)) {
+    btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i> Guardar ingreso';
+    errEl.textContent = 'Ya existe un ingreso con ese código de muestra para esa misma prueba.';
+    errEl.style.display = 'block'; return;
+  }
 
   const {error} = await sb.from('ingresos').insert({
     od_id,
@@ -167,7 +168,9 @@ async function guardarIngresoManual() {
 
   if (error) {
     if (error.code === '23505') {
-      errEl.textContent = 'Ya existe un ingreso con ese OD_ID. Verifica el código.';
+      errEl.textContent = od_id_input
+        ? 'Ya existe un ingreso con ese OD_ID. Verifica el código.'
+        : 'Ya existe un ingreso manual con ese código de muestra.';
     } else {
       errEl.textContent = 'Error: ' + error.message;
     }

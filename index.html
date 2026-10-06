@@ -22,15 +22,16 @@
       <button class="btn" style="margin-left:auto;padding:3px 7px" onclick="cerrarModalIngresoManual()"><i class="ti ti-x"></i></button>
     </div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:20px">Crea manualmente el ingreso de una muestra que no llegó por LabCore.</div>
-    <div id="im-nro-conocido-wrap" style="display:none;margin-bottom:12px;padding:8px 12px;background:var(--yellow-bg);border:0.5px solid var(--yellow-border);border-radius:var(--radius)">
-      <div style="font-size:10px;color:var(--yellow);font-weight:600">Código de muestra (ya escaneado en recepción)</div>
-      <div id="im-nro-conocido" class="mono" style="font-size:14px;color:var(--yellow);font-weight:600"></div>
+    <div id="im-nro-muestra-wrap" class="fl-group" style="margin-bottom:10px">
+      <div class="fl-label">Código de muestra de LabCore *</div>
+      <input id="im-nro-muestra" class="mono" placeholder="Ej: 260912165403 — el código del tubo" style="width:100%" />
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">Es el código con el que se cruzan los validados. Obligatorio.</div>
     </div>
     <div class="grid2" style="margin-bottom:10px">
       <div class="fl-group">
-        <div class="fl-label">OD_ID de LabCore *</div>
-        <input id="im-od-id" placeholder="Ej: 58534683 — NO es el código de muestra" style="width:100%" />
-        <div style="font-size:10px;color:var(--red);margin-top:2px">⚠ Escribe el OD_ID real que asigna LabCore, no el código del tubo</div>
+        <div class="fl-label">OD_ID de LabCore <span style="color:var(--text3);font-weight:400">(opcional)</span></div>
+        <input id="im-od-id" placeholder="Si no lo tienes, déjalo vacío" style="width:100%" />
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Si lo dejas vacío se genera uno interno automáticamente.</div>
       </div>
       <div class="fl-group">
         <div class="fl-label">Código de estudio (prueba) *</div>

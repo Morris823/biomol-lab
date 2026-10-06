@@ -65,14 +65,21 @@ async function handleValFile(e) {
   let count = 0, errores = 0;
   const BATCH = 50;
 
+  // Para los ingresos manuales el cruce NO es por OD_ID (puede no existir) sino por
+  // el código de muestra de LabCore, que el archivo de validados también trae.
+  // Se guarda aquí: código de muestra -> [{codEstudio, fechaVal}]
+  const porNroMuestra = new Map();
+  const odsDelArchivo = new Set();
+
   for (let i = 0; i < rows.length; i += BATCH) {
     const batch = rows.slice(i, i + BATCH);
     const toUpsert = [];
 
     for (const row of batch) {
-      // OD_ID es obligatorio
-      const od = getV(row, ['OD_ID','OD ID','ODID']);
-      if (!od) continue;
+      const od  = getV(row, ['OD_ID','OD ID','ODID']);
+      const nro = getV(row, ['NRO MUESTRA','CODIGO MUESTRA','CÓDIGO MUESTRA','NRO_MUESTRA','NUMERO MUESTRA']);
+      // Sin OD_ID y sin código de muestra no hay nada con qué cruzar
+      if (!od && !nro) continue;
 
       // Filtrar solo pruebas del laboratorio por código
       const codEstudio = getV(row, ['ESTUDIO CODIGO','ESTUDIO CÓDIGO','COD ESTUDIO','CODIGO ESTUDIO']);
@@ -92,6 +99,13 @@ async function handleValFile(e) {
         // String datetime sin TZ — asumir Colombia
         fechaVal = localCOtoUTC(fechaVal.slice(0,16));
       }
+
+      if (nro) {
+        if (!porNroMuestra.has(nro)) porNroMuestra.set(nro, []);
+        porNroMuestra.get(nro).push({codEstudio, fechaVal});
+      }
+      if (!od) continue;
+      odsDelArchivo.add(od);
 
       toUpsert.push({
         od_id: od,
@@ -124,6 +138,46 @@ async function handleValFile(e) {
     }
   }
 
+  // ---- Cruce de ingresos MANUALES por código de muestra de LabCore ----
+  // Los ingresos manuales pueden no tener OD_ID real (se les genera MAN-<código>),
+  // así que el OD_ID del archivo nunca les va a coincidir. Se buscan por nro_muestra.
+  let manuales = 0;
+  if (porNroMuestra.size) {
+    if (progLbl) progLbl.textContent = 'Cruzando ingresos manuales por código de muestra...';
+    const nros = [...porNroMuestra.keys()];
+    const pendientes = [];
+    for (let i = 0; i < nros.length; i += 100) {
+      const chunk = nros.slice(i, i + 100);
+      const {data, error} = await sb.from('ingresos')
+        .select('od_id,nro_muestra,estudio_codigo')
+        .in('nro_muestra', chunk)
+        .ilike('subido_por', '%manual%');
+      if (error) { console.error('Error cruzando manuales:', error); break; }
+      for (const ing of (data || [])) {
+        // Si el OD_ID del ingreso ya venía en el archivo, ya quedó validado arriba
+        if (odsDelArchivo.has(ing.od_id)) continue;
+        const filas = porNroMuestra.get(ing.nro_muestra) || [];
+        // Si el archivo trae código de estudio, exigir que coincida (un mismo tubo
+        // puede tener varias pruebas); si no lo trae, basta el código de muestra.
+        const fila = filas.find(f => f.codEstudio && String(f.codEstudio) === String(ing.estudio_codigo))
+                  || filas.find(f => !f.codEstudio);
+        if (!fila) continue;
+        pendientes.push({
+          od_id: ing.od_id,
+          fecha_validacion: fila.fechaVal,
+          importado_por: currentUser,
+          hasta_fecha: hasta
+        });
+      }
+    }
+    for (let i = 0; i < pendientes.length; i += BATCH) {
+      const lote = pendientes.slice(i, i + BATCH);
+      const {error} = await sb.from('validaciones').upsert(lote, {onConflict: 'od_id'});
+      if (error) { console.error('Batch manual error:', error); errores += lote.length; }
+      else { manuales += lote.length; count += lote.length; }
+    }
+  }
+
   if (progBar) { progBar.style.width='100%'; progLbl.textContent='¡Listo! ' + count + ' validados importados.'; }
 
   try {
@@ -138,7 +192,8 @@ async function handleValFile(e) {
   await loadValHist();
   e.target.value = '';
   setTimeout(() => { if(progArea) progArea.style.display='none'; }, 3000);
-  if (errores > 0) toast(`${count} validados importados (${errores} con error)`, 'info');
-  else toast(`✓ ${count} validados importados correctamente`, 'ok');
+  const sufijoMan = manuales ? ` · ${manuales} manual(es) cruzado(s) por código de muestra` : '';
+  if (errores > 0) toast(`${count} validados importados (${errores} con error)${sufijoMan}`, 'info');
+  else toast(`✓ ${count} validados importados correctamente${sufijoMan}`, 'ok');
 }
 
