@@ -219,6 +219,10 @@ async function procesarTBScan(val) {
   if (error) { toast('Error: ' + error.message, 'err'); return; }
   posicionesTB.push(data);
 
+  // Igual que en matrícula: la muestra entró a proceso, así que su seguimiento
+  // en "Revisión de pendientes" pasa a "En proceso" sobreescribiendo lo anterior.
+  marcarSeguimientoEnProceso(val, 'tb').catch(e => console.error(e));
+
   if (estadoMuestra === 'validado') {
     fb.className = 'scan-fb sf-dup';
     fb.innerHTML = `<strong><i class="ti ti-alert-triangle"></i> Posición ${posicion} — ${ingreso?.paciente||val}</strong><br>

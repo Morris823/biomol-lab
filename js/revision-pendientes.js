@@ -55,7 +55,10 @@ async function cargarSeguimiento(area) {
     await cargarEnCorridaTBGlobal();
   }
 
-  // Auto-completar observación con "En proceso" si ya está en matrícula/corrida y no tiene observación
+  // Auto-completar observación con "En proceso" si ya está en matrícula/corrida y no tiene observación.
+  // El caso de "ya tiene algo escrito" se resuelve en el momento del escaneo
+  // (ver marcarSeguimientoEnProceso), no aquí, para no borrar en cada recarga una
+  // nota que se haya escrito DESPUÉS de que la muestra entró a proceso.
   const setGrupo = area === 'manuales' ? enMatriculaGlobal : enCorridaTBGlobal;
   for (const r of segRows[area]) {
     if (!r.observacion && setGrupo.has(r.nro_muestra)) {
@@ -65,6 +68,28 @@ async function cargarSeguimiento(area) {
   }
 
   renderSegTabla(area);
+}
+
+// Al escanear una muestra en una matrícula ('manuales') o en una corrida de TB ('tb'),
+// su seguimiento en "Revisión de pendientes" pasa a "En proceso". SOBREESCRIBE lo que
+// hubiera escrito antes: si la muestra ya entró a proceso, la nota de gestión anterior
+// ("pendiente de llamar", "sin muestra", etc.) ya no aplica.
+// No toca los seguimientos ya validados ni los que ya dicen "En proceso".
+async function marcarSeguimientoEnProceso(nroMuestra, area) {
+  if (!nroMuestra) return 0;
+  const {data, error} = await sb.from('seguimiento_manuales')
+    .select('id,estado,observacion').eq('nro_muestra', nroMuestra).eq('area', area);
+  if (error) { console.error('Error buscando seguimiento:', error); return 0; }
+  const objetivo = (data || []).filter(r => r.estado !== 'validado' && r.observacion !== 'En proceso');
+  if (!objetivo.length) return 0;
+  const ids = objetivo.map(r => r.id);
+  const {error: errUpd} = await sb.from('seguimiento_manuales')
+    .update({ observacion: 'En proceso' }).in('id', ids);
+  if (errUpd) { console.error('Error marcando En proceso:', errUpd); return 0; }
+  // Reflejarlo en memoria por si la sección de revisión ya está cargada
+  const lista = segRows[area] || [];
+  for (const r of lista) if (ids.includes(r.id)) r.observacion = 'En proceso';
+  return ids.length;
 }
 
 function renderSegTabla(area) {

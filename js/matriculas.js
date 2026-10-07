@@ -213,6 +213,11 @@ async function procesarMatScan(val) {
 
   posicionesActual.push(data);
 
+  // La muestra entró a proceso: su seguimiento en "Revisión de pendientes" pasa a
+  // "En proceso" aunque ya tuviera otra observación escrita. Sin await para no
+  // frenar el escaneo del siguiente tubo.
+  marcarSeguimientoEnProceso(val, 'manuales').catch(e => console.error(e));
+
   // Feedback
   if (alertaTipo === 'duplicado') {
     fb.className = 'scan-fb sf-err';
