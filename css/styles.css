@@ -136,7 +136,7 @@ tbody td{padding:7px 12px;vertical-align:middle}
 .tl-vline{width:1px;flex:1;background:var(--border);min-height:12px;margin:2px 0 0 0}
 
 /* TOAST */
-.toast-container{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:999}
+.toast-container{position:fixed;top:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:999}
 .toast{padding:10px 16px;border-radius:var(--radius);font-size:12px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.15);animation:slideIn .2s;max-width:320px}
 .toast-ok{background:var(--green-bg);color:var(--green);border:0.5px solid var(--green-border)}
 .toast-err{background:var(--red-bg);color:var(--red);border:0.5px solid var(--red-border)}

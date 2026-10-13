@@ -3,17 +3,44 @@
 // ============================================================
 let segFiltro = { manuales: 'activos', tb: 'activos' };
 let segRows = { manuales: [], tb: [] };
-let enMatriculaGlobal = new Set();
-let enCorridaTBGlobal = new Set();
+// nro_muestra -> {nombre: 'MAT-20260101-001', veces: 1}  (la matrícula/corrida más reciente)
+let enMatriculaGlobal = new Map();
+let enCorridaTBGlobal = new Map();
 
-async function cargarEnMatriculaGlobal() {
-  const {data} = await sb.from('matricula_posiciones').select('nro_muestra').eq('es_control', false);
-  enMatriculaGlobal = new Set((data||[]).map(p => p.nro_muestra));
+// Antes se traían TODAS las posiciones sin filtro, y PostgREST corta en 1000 filas:
+// por eso las muestras de matrículas viejas dejaban de decir "En matrícula". Ahora se
+// consulta solo por los códigos que están en la lista de revisión, así no depende de
+// la antigüedad de la matrícula y además se descarga muchísimo menos.
+async function cargarGrupoGlobal(tabla, relacion, campoNombre, nros) {
+  const mapa = new Map();
+  const unicos = [...new Set((nros || []).filter(Boolean))];
+  for (let i = 0; i < unicos.length; i += 100) {
+    const chunk = unicos.slice(i, i + 100);
+    const {data, error} = await sb.from(tabla)
+      .select(`nro_muestra,created_at,${relacion}(${campoNombre})`)
+      .in('nro_muestra', chunk)
+      .eq('es_control', false)
+      .order('created_at', {ascending: true});
+    if (error) { console.error('Error cargando ' + tabla + ':', error); continue; }
+    for (const p of (data || [])) {
+      if (!p.nro_muestra) continue;
+      const previo = mapa.get(p.nro_muestra);
+      // Orden ascendente: la última que se procesa es la más reciente y es la que queda
+      mapa.set(p.nro_muestra, {
+        nombre: p[relacion]?.[campoNombre] || previo?.nombre || null,
+        veces: (previo?.veces || 0) + 1
+      });
+    }
+  }
+  return mapa;
 }
 
-async function cargarEnCorridaTBGlobal() {
-  const {data} = await sb.from('corrida_tb_posiciones').select('nro_muestra').eq('es_control', false);
-  enCorridaTBGlobal = new Set((data||[]).map(p => p.nro_muestra));
+async function cargarEnMatriculaGlobal(nros) {
+  enMatriculaGlobal = await cargarGrupoGlobal('matricula_posiciones', 'matriculas', 'mat_id', nros);
+}
+
+async function cargarEnCorridaTBGlobal(nros) {
+  enCorridaTBGlobal = await cargarGrupoGlobal('corrida_tb_posiciones', 'corridas_tb', 'corr_id', nros);
 }
 
 function chipSeg(el, val, area) {
@@ -49,10 +76,11 @@ async function cargarSeguimiento(area) {
     }
   }
 
+  const nrosSeg = segRows[area].map(r => r.nro_muestra);
   if (area === 'manuales') {
-    await cargarEnMatriculaGlobal();
+    await cargarEnMatriculaGlobal(nrosSeg);
   } else {
-    await cargarEnCorridaTBGlobal();
+    await cargarEnCorridaTBGlobal(nrosSeg);
   }
 
   // Auto-completar observación con "En proceso" si ya está en matrícula/corrida y no tiene observación.
@@ -95,7 +123,6 @@ async function marcarSeguimientoEnProceso(nroMuestra, area) {
 function renderSegTabla(area) {
   const hoy = new Date();
   const hoyISO = hoy.toISOString().slice(0,10);
-  const enSet = area === 'manuales' ? enMatriculaGlobal : enCorridaTBGlobal;
 
   let rows = segFiltro[area] === 'activos'
     ? segRows[area].filter(r => r.estado !== 'validado')
@@ -160,10 +187,14 @@ function renderSegTabla(area) {
     const limite = cfg?.limite || 3;
     const dias = fechaRef ? diasHabilesGlobal(new Date(fechaRef).toISOString().slice(0,10), hoyISO) : null;
     const enRecepcion = !!(muestra?.fecha_recepcion);
-    const enGrupo = area === 'manuales'
-      ? enMatriculaGlobal.has(r.nro_muestra)
-      : enCorridaTBGlobal.has(r.nro_muestra);
-    const etiquetaGrupo = area === 'manuales' ? 'En matrícula' : 'En corrida TB';
+    const grupoInfo = area === 'manuales'
+      ? enMatriculaGlobal.get(r.nro_muestra)
+      : enCorridaTBGlobal.get(r.nro_muestra);
+    const enGrupo = !!grupoInfo;
+    // Se muestra el nombre de la matrícula/corrida y, si estuvo en más de una, cuántas veces
+    const etiquetaGrupo = (area === 'manuales' ? 'En matrícula' : 'En corrida TB')
+      + (grupoInfo?.nombre ? ' ' + grupoInfo.nombre : '')
+      + (grupoInfo?.veces > 1 ? ` · ${grupoInfo.veces}ª vez` : '');
 
     const rowBg = r.tipo === 'fantasma' ? 'background:var(--red-bg)'
       : r.estado === 'gestionado' ? 'background:var(--yellow-bg)'

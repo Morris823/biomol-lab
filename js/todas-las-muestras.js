@@ -270,6 +270,7 @@ function openD(od_id) {
     ${same.length>1?`<div style="margin-top:10px;padding:8px 10px;background:var(--accent-bg);border-radius:var(--radius);font-size:11px;color:var(--accent)">
       <i class="ti ti-stack-2"></i> <strong>${same.length} pruebas</strong> en este tubo:<br>
       ${same.map(x=>`• ${nombreCorto(x.estudio_nombre,x.estudio_codigo)} — ${pill(x.estado)}`).join('<br>')}</div>`:''}
+    <div id="d-grupo"></div>
     <div style="margin-top:14px;font-size:11px;font-weight:500;margin-bottom:8px;color:var(--text2)">Línea de tiempo</div>
     ${hist.map((h,i)=>`<div class="tl-item">
       <div style="display:flex;flex-direction:column;align-items:center">
@@ -284,6 +285,37 @@ function openD(od_id) {
   document.getElementById('ov').classList.add('open');
   document.getElementById('drawer').classList.add('open');
   mostrarAccionesDrawer(od_id, m.nro_muestra);
+  mostrarGrupoDrawer(m.nro_muestra);
+}
+
+// Muestra en qué matrícula(s) o corrida(s) de TB está o estuvo la muestra.
+// Se consulta solo por este código, así que no agrega carga a la tabla general.
+async function mostrarGrupoDrawer(nro_muestra) {
+  const cont = document.getElementById('d-grupo');
+  if (!cont || !nro_muestra) return;
+  cont.innerHTML = '';
+  const [mat, tb] = await Promise.all([
+    sb.from('matricula_posiciones').select('posicion,created_at,matriculas(mat_id)')
+      .eq('nro_muestra', nro_muestra).eq('es_control', false),
+    sb.from('corrida_tb_posiciones').select('posicion,created_at,corridas_tb(corr_id)')
+      .eq('nro_muestra', nro_muestra).eq('es_control', false)
+  ]);
+  const filas = [
+    ...(mat.data || []).map(p => ({et:'Matrícula',  nombre:p.matriculas?.mat_id,    pos:p.posicion, fecha:p.created_at})),
+    ...(tb.data  || []).map(p => ({et:'Corrida TB', nombre:p.corridas_tb?.corr_id, pos:p.posicion, fecha:p.created_at}))
+  ].filter(f => f.nombre || f.fecha);
+  if (!filas.length) return;
+  filas.sort((a,b) => new Date(a.fecha||0) - new Date(b.fecha||0));
+  cont.innerHTML = `
+    <div style="margin-top:14px;font-size:11px;font-weight:500;margin-bottom:6px;color:var(--text2)">
+      ${filas.length > 1 ? 'Matrículas / corridas' : 'Matrícula / corrida'}
+    </div>
+    ${filas.map(f => `<div class="drow">
+      <span class="dlabel">${f.et}</span>
+      <span style="font-size:11px;text-align:right">
+        <span class="mono">${f.nombre || '—'}</span>
+        <span style="color:var(--text3)">${f.pos ? ' · pos ' + f.pos : ''}${f.fecha ? ' · ' + fmt(f.fecha) : ''}</span>
+      </span></div>`).join('')}`;
 }
 
 // Acciones extra del drawer. El boton de eliminar SOLO aparece si el ingreso se
