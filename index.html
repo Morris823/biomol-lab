@@ -440,13 +440,13 @@
               <div class="grid2" style="margin-bottom:10px">
                 <div class="fl-group">
                   <div class="fl-label">Código muestra</div>
-                  <input id="rep-cod" placeholder="260522xxxxx" style="width:100%" />
+                  <input id="rep-cod" placeholder="260522xxxxx" style="width:100%" autocomplete="off"
+                    oninput="onRepCodInput(this.value)" />
                 </div>
                 <div class="fl-group">
                   <div class="fl-label">Prueba</div>
-                  <select id="rep-prueba" style="width:100%">
-                    <option>VPH</option><option>VIH</option><option>Hepatitis B</option><option>Hepatitis C</option><option>CMV</option><option>Tuberculosis</option><option>HLA-B27</option><option>HLA-B57</option><option>Otra</option>
-                  </select>
+                  <select id="rep-prueba" style="width:100%"></select>
+                  <div id="rep-prueba-hint" style="display:none;margin-top:5px;font-size:11px"></div>
                 </div>
               </div>
               <div class="fl-group" style="margin-bottom:10px">

@@ -80,7 +80,7 @@ function renderRemisionActiva() {
       <div id="rem-scan-fb" class="scan-fb" style="margin-top:8px"></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="btn btn-yellow" onclick="cerrarRemision('${remisionActual.id}')"><i class="ti ti-lock"></i> Cerrar remisión</button>
-        <button class="btn" onclick="copiarParaColcan()" ${posicionesRemision.length===0?'disabled':''}><i class="ti ti-copy"></i> Copiar para Colcan</button>
+        <button class="btn" onclick="copiarParaColcan()" ${posicionesRemision.length===0?'disabled':''}><i class="ti ti-mail"></i> Copiar correo para Colcan</button>
         <button class="btn" onclick="generarPDFRemision()" ${posicionesRemision.length===0?'disabled':''}><i class="ti ti-file-type-pdf"></i> Generar PDF</button>
       </div>
     </div>
@@ -207,9 +207,20 @@ function nombreCompletoColcan(codigoColcan) {
   return '';
 }
 
+// Copia un cuerpo de correo listo para pegar en Outlook: saludo, tabla con las
+// muestras de la remisión y la solicitud de devolución. Se copia en dos formatos:
+// HTML (al pegar en el correo queda como tabla) y texto plano (respaldo, con
+// columnas separadas por tabulador, así que también se puede pegar en Excel).
 function copiarParaColcan() {
-  // Columnas A-H exactas para pegar en el formato Colcan
-  const filas = posicionesRemision.map(p => [
+  const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const n = posicionesRemision.length;
+  const hora = Number(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false, timeZone: TZ_CO }).slice(0, 2));
+  const saludo = hora < 12 ? 'Buenos días' : 'Buenas tardes';
+  const codigo = remisionActual?.codigo_remision || '';
+  const fecha = fmt(new Date());
+  const encabezados = ['#', 'Cód. Colcan', 'Prueba', 'Código muestra', 'Observación', 'Identificación', 'Apellidos', 'Nombres', 'Edad'];
+  const filas = posicionesRemision.map((p, i) => [
+    i + 1,
     p.codigo_colcan || '',
     nombreCompletoColcan(p.codigo_colcan) || nombreCorto(p.estudio_nombre,'') || '',
     p.nro_muestra || '',
@@ -218,9 +229,41 @@ function copiarParaColcan() {
     p.apellidos || '',
     p.nombres || '',
     p.edad ?? ''
-  ].join('\t'));
-  const texto = filas.join('\n');
-  navigator.clipboard.writeText(texto).then(() => toast(`${posicionesRemision.length} filas copiadas — listas para pegar en Colcan`, 'ok'));
+  ]);
+  const intro = `Por medio del presente remitimos ${n === 1 ? 'la siguiente muestra' : `las siguientes ${n} muestras`} para su procesamiento (remisión ${codigo}, ${fecha}):`;
+  const cierre = `Les solicitamos amablemente la devolución de ${n === 1 ? 'la muestra' : 'las muestras'} una vez ${n === 1 ? 'sea procesada' : 'sean procesadas'}.`;
+  const firma = [currentUser || '', 'Laboratorio de Biología Molecular'].filter(Boolean);
+
+  const td = 'border:1px solid #BFBFBF;padding:4px 8px;font-family:Calibri,Arial,sans-serif;font-size:11pt';
+  const html = `<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt">
+<p>${saludo},</p>
+<p>${esc(intro)}</p>
+<table style="border-collapse:collapse">
+<tr>${encabezados.map(h => `<th style="${td};background:#F2F2F2;text-align:left">${h}</th>`).join('')}</tr>
+${filas.map(f => `<tr>${f.map(c => `<td style="${td}">${esc(c)}</td>`).join('')}</tr>`).join('\n')}
+</table>
+<p>${esc(cierre)}</p>
+<p>Quedamos atentos a cualquier inquietud.</p>
+<p>Cordialmente,<br>${firma.map(esc).join('<br>')}</p>
+</div>`;
+  const texto = [
+    `${saludo},`, '', intro, '',
+    encabezados.join('\t'),
+    ...filas.map(f => f.join('\t')),
+    '', cierre, '', 'Quedamos atentos a cualquier inquietud.', '', 'Cordialmente,', ...firma
+  ].join('\n');
+
+  const ok = () => toast(`Correo copiado con ${n} muestra${n === 1 ? '' : 's'} — pégalo en Outlook`, 'ok');
+  const fallo = () => toast('No se pudo copiar al portapapeles', 'err');
+  if (!navigator.clipboard) { fallo(); return; }
+  if (window.ClipboardItem && navigator.clipboard.write) {
+    navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([texto], { type: 'text/plain' })
+    })]).then(ok).catch(() => navigator.clipboard.writeText(texto).then(ok, fallo));
+  } else {
+    navigator.clipboard.writeText(texto).then(ok, fallo);
+  }
 }
 
 function generarPDFRemision() {

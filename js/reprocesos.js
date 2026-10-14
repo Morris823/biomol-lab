@@ -96,13 +96,82 @@ function clearMotivo() {
 
 function closeAc(){document.getElementById('ac-drop').classList.remove('open');acIdx=-1;}
 
+// ------------------------------------------------------------
+// Prueba automática según el código escaneado.
+// Un mismo tubo puede tener varias pruebas (cada una con su OD_ID). Si el código
+// tiene una sola, se llena sola; si tiene varias, se pide elegir cuál se reprocesa.
+// Así también se guarda el OD_ID correcto de esa prueba (antes se tomaba el primero).
+// ------------------------------------------------------------
+let repCandidatos = [];   // [{prueba, od_id}] para el código actual
+let repCodTimer = null;
+let repCodBuscado = '';
+
+function pruebasRep() { return [...Object.keys(CONFIG_PRUEBA).filter(k => k !== 'HIV'), 'Otra']; }
+function cortoRep(estudio_nombre, estudio_codigo) {
+  const c = nombreCorto(estudio_nombre, estudio_codigo);
+  return c === 'HIV' ? 'VIH' : c;
+}
+
+// modo: 'libre' (todas las pruebas, sin elegir), 'una' (una sola, ya elegida),
+// 'varias' (solo las del código, sin elegir) o 'sin-ingreso' (todas, sin elegir)
+function renderPruebaRep(modo, seleccion) {
+  const sel = document.getElementById('rep-prueba');
+  const hint = document.getElementById('rep-prueba-hint');
+  if (!sel) return;
+  const lista = modo === 'varias' ? repCandidatos.map(c => c.prueba) : pruebasRep();
+  const placeholder = modo === 'una' ? '' : `<option value="" disabled selected>— elige la prueba —</option>`;
+  sel.innerHTML = placeholder + lista.map(p => `<option value="${p}"${p === seleccion ? ' selected' : ''}>${p}</option>`).join('');
+  sel.style.borderColor = modo === 'varias' ? 'var(--yellow-border)' : '';
+  const msgs = {
+    una: `<span style="color:var(--green)"><i class="ti ti-circle-check"></i> Prueba tomada del ingreso</span>`,
+    varias: `<span style="color:var(--yellow)"><i class="ti ti-alert-triangle"></i> Este código tiene ${repCandidatos.length} pruebas (${repCandidatos.map(c => c.prueba).join(', ')}). Elige cuál se está reprocesando.</span>`,
+    'sin-ingreso': `<span style="color:var(--text3)"><i class="ti ti-info-circle"></i> No se encontró el ingreso de este código. Elige la prueba a mano.</span>`,
+  };
+  hint.innerHTML = msgs[modo] || '';
+  hint.style.display = msgs[modo] ? 'block' : 'none';
+}
+
+function onRepCodInput(val) {
+  clearTimeout(repCodTimer);
+  const cod = val.trim();
+  if (cod.length < 6) { repCandidatos = []; repCodBuscado = ''; renderPruebaRep('libre'); return; }
+  repCodTimer = setTimeout(() => buscarPruebasRep(cod), 250);
+}
+
+async function buscarPruebasRep(cod) {
+  if (cod === repCodBuscado) return;
+  repCodBuscado = cod;
+  // 1. Lo que ya está en memoria (no gasta egress)
+  let filas = allMuestras.filter(m => m.nro_muestra === cod || m.od_id === cod)
+    .map(m => ({ od_id: m.od_id, estudio_nombre: m.estudio_nombre, estudio_codigo: m.estudio_codigo }));
+  // 2. Si no está en memoria, una consulta pequeña a ingresos (solo 3 columnas)
+  if (!filas.length) {
+    const {data} = await sb.from('ingresos').select('od_id,estudio_nombre,estudio_codigo').eq('nro_muestra', cod);
+    filas = data || [];
+  }
+  if (document.getElementById('rep-cod').value.trim() !== cod) return; // el usuario ya cambió el código
+  const vistos = new Map();
+  filas.forEach(f => { const p = cortoRep(f.estudio_nombre, f.estudio_codigo); if (!vistos.has(p)) vistos.set(p, f.od_id); });
+  repCandidatos = [...vistos].map(([prueba, od_id]) => ({ prueba, od_id }));
+  if (repCandidatos.length === 1) renderPruebaRep('una', repCandidatos[0].prueba);
+  else if (repCandidatos.length > 1) { renderPruebaRep('varias'); document.getElementById('rep-prueba').focus(); }
+  else renderPruebaRep('sin-ingreso');
+}
+
 async function registrarReproceso(esNuevaMuestra) {
   const cod = document.getElementById('rep-cod').value.trim();
   const prueba = document.getElementById('rep-prueba').value;
   if (!cod) { toast('Ingresa el código de muestra', 'err'); return; }
+  if (cod !== repCodBuscado) await buscarPruebasRep(cod);  // escribió y dio clic antes de que terminara la búsqueda
+  if (!document.getElementById('rep-prueba').value) {
+    toast(repCandidatos.length > 1 ? 'Este código tiene varias pruebas: elige cuál se está reprocesando' : 'Elige la prueba', 'err');
+    document.getElementById('rep-prueba').focus();
+    return;
+  }
   if (!selectedMotivo) { toast('Selecciona un motivo', 'err'); return; }
+  const elegida = repCandidatos.find(c => c.prueba === prueba);
   const ingreso = allMuestras.find(m => m.nro_muestra === cod || m.od_id === cod);
-  const od = ingreso?.od_id || cod;
+  const od = elegida?.od_id || ingreso?.od_id || cod;
 
   // Contar cuántas veces ha estado en reproceso para alertar
   const {count: vecesRep} = await sb.from('reprocesos').select('*',{count:'exact',head:true}).eq('nro_muestra', cod);
@@ -127,6 +196,7 @@ async function registrarReproceso(esNuevaMuestra) {
     toast('Reproceso registrado', 'ok');
   }
   document.getElementById('rep-cod').value='';
+  repCandidatos = []; repCodBuscado = ''; renderPruebaRep('libre');
   clearMotivo();
   await loadMuestras({force:true});
   loadReprocesos();
@@ -139,6 +209,8 @@ function chipRep(el, val) {
 }
 
 async function loadReprocesos() {
+  const selPrueba = document.getElementById('rep-prueba');
+  if (selPrueba && !selPrueba.options.length) renderPruebaRep('libre');
   const {data:reps} = await sb.from('reprocesos').select('*').order('fecha',{ascending:false}).limit(200);
   let all = (reps||[]).map(r=>({...r,tipo:'reproceso'}));
   all.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
@@ -228,7 +300,7 @@ async function loadReprocesos() {
         const pruebaActual = r.estudio_nombre ? nombreCorto(r.estudio_nombre,'') : '';
         const tabla = r.tabla || 'reprocesos';
         return `<tr>
-          <td class="mono">${fmt(r.fecha)}</td>
+          <td class="mono" data-sort="${r.fecha ? new Date(r.fecha).getTime() : 0}">${fmt(r.fecha)} <span style="font-size:10px;color:var(--text3)">${r.fecha ? fmtHora(r.fecha) : ''}</span></td>
           <td class="mono">${r.nro_muestra}${vecesBadge}</td>
           <td onclick="event.stopPropagation()">
             <select style="font-size:11px;padding:2px 4px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg2)"

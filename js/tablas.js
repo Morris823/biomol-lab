@@ -46,8 +46,9 @@ function sortTable(tablaId, colIdx) {
   const asc = (prev.col === colIdx) ? !prev.asc : true;
   sortState[tablaId] = { col: colIdx, asc };
   rows.sort((a, b) => {
-    const aVal = (a.cells[colIdx]?.textContent || '').trim();
-    const bVal = (b.cells[colIdx]?.textContent || '').trim();
+    // data-sort permite ordenar por un valor distinto al texto (p. ej. fecha+hora en milisegundos)
+    const aVal = (a.cells[colIdx]?.dataset.sort ?? a.cells[colIdx]?.textContent ?? '').trim();
+    const bVal = (b.cells[colIdx]?.dataset.sort ?? b.cells[colIdx]?.textContent ?? '').trim();
     const aNum = parseFloat(aVal.replace(/[^0-9.\-]/g,''));
     const bNum = parseFloat(bVal.replace(/[^0-9.\-]/g,''));
     let cmp;
