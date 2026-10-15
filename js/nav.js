@@ -4,7 +4,7 @@
 const PAGE_TITLES = {
   dashboard:'Dashboard', ingresos:'Importar ingresos', recepcion:'Recepción de muestras',
   cierre:'Cierre de turno', validacion:'Importar validados', reprocesos:'Reprocesos',
-  pendientes:'Pendientes y gestionadas', 'sin-ingreso':'Recibidas sin ingreso', anulados:'Anulados',
+  pendientes:'Pendientes y gestionadas', hematologia:'Rescatar de hematología', 'sin-ingreso':'Recibidas sin ingreso', anulados:'Anulados',
   muestras:'Todas las muestras', matriculas:'Pruebas manuales — Matrículas',
   tuberculosis:'Tuberculosis — Corridas', correo:'Generar correo',
   'revision-manuales':'Revisión de pendientes — Manuales', 'revision-tb':'Revisión de pendientes — TB',
@@ -25,6 +25,7 @@ function nav(name, el) {
   if (name === 'reprocesos') loadReprocesos();
   if (name === 'validacion') loadValHist();
   if (name === 'sin-ingreso') loadSinIngreso();
+  if (name === 'hematologia') loadRescateHemato();
   if (name === 'anulados') loadAnulados();
   if (name === 'matriculas') initMatriculas();
   if (name === 'tuberculosis') initTB();

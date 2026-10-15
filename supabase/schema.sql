@@ -399,6 +399,12 @@ create index if not exists idx_recepciones_fecha on public.recepciones (fecha_re
 -- Joins de v_muestras por od_id / nro_muestra
 create index if not exists idx_ingresos_nro_muestra on public.ingresos (nro_muestra);
 create index if not exists idx_reprocesos_od_id on public.reprocesos (od_id);
+
+-- Rescatar de hematología: pruebas manuales que llegaron en el mismo archivo de
+-- ingresos con un hemoleucograma (1001934) para el mismo código de muestra.
+-- Se marca al importar y se desmarca al escanear el tubo en Recepción.
+alter table public.ingresos add column if not exists con_hemograma boolean not null default false;
+create index if not exists idx_ingresos_con_hemograma on public.ingresos (od_id) where con_hemograma;
 create index if not exists idx_nuevas_muestras_od_id on public.nuevas_muestras (od_id);
 create index if not exists idx_remision_posiciones_nro_muestra on public.remision_posiciones (nro_muestra);
 -- Lookups por tabla padre (posiciones)

@@ -30,6 +30,11 @@ async function processScan(val) {
   });
   if (error) { toast('Error al registrar: ' + error.message, 'err'); return; }
 
+  // Si estaba en "Rescatar de hematología", ya llegó: se quita la marca
+  if (!sinIngreso && await quitarMarcaHemato(val, pruebas)) {
+    toast('Muestra rescatada de hematología — salió de la lista', 'ok');
+  }
+
   const hora = new Date().toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
 
   if (sinIngreso) {

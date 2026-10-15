@@ -138,6 +138,7 @@
       <div class="nav-item" onclick="nav('ingresos',this)"><i class="ti ti-file-import"></i> Ingresos</div>
       <div class="nav-item" onclick="nav('recepcion',this)"><i class="ti ti-scan"></i> Recepción <span class="badge" id="badge-pend">0</span></div>
       <div class="nav-item" onclick="nav('pendientes',this)"><i class="ti ti-clock"></i> Pendientes por recibir</div>
+      <div class="nav-item" onclick="nav('hematologia',this)"><i class="ti ti-droplet"></i> Rescatar de hematología <span class="badge" id="badge-hemato" style="display:none;background:var(--red-bg);color:var(--red)">0</span></div>
       <div class="nav-item" onclick="nav('sin-ingreso',this)"><i class="ti ti-alert-triangle"></i> Sin ingreso <span class="badge" id="badge-sin-ingreso" style="display:none">0</span></div>
       <div class="nav-item" onclick="nav('anulados',this)"><i class="ti ti-ban"></i> Anulados</div>
       <div class="nav-item" onclick="nav('correo',this)"><i class="ti ti-mail"></i> Generar correo</div>
@@ -525,6 +526,33 @@
             </tr></thead>
             <tbody id="pend-tabla"><tr><td colspan="8" class="empty-state">Cargando...</td></tr></tbody></table>
             <div id="pend-paginacion" style="padding:8px 14px;border-top:0.5px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
+          </div>
+        </div>
+
+        <div class="page" id="page-hematologia">
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-droplet"></i> Rescatar de hematología</span>
+              <span style="font-size:11px;color:var(--text3);flex:1;margin-left:6px" id="hemato-count"></span>
+              <button class="btn" id="hemato-copiar" onclick="copiarCodigosHemato()"><i class="ti ti-copy"></i> Copiar códigos</button>
+            </div>
+            <div style="padding:10px 14px;background:var(--red-bg);border-bottom:0.5px solid var(--red-border);font-size:12px;color:var(--red)">
+              <i class="ti ti-info-circle"></i> Estas muestras tienen con el mismo código un <strong>hemoleucograma</strong> y una prueba manual nuestra, y todavía no se han recibido aquí.
+              Si la sede mandó un solo tubo, puede estar en hematología: hay que ir por él antes de que lo descarten.
+              Al escanearla en Recepción sale sola de esta lista.
+            </div>
+            <table>
+              <thead><tr>
+                <th onclick="sortTable('hemato-tabla',0)" style="cursor:pointer">Código <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                <th onclick="sortTable('hemato-tabla',1)" style="cursor:pointer">Paciente <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                <th>Cédula</th>
+                <th onclick="sortTable('hemato-tabla',3)" style="cursor:pointer">Prueba <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                <th onclick="sortTable('hemato-tabla',4)" style="cursor:pointer">Sede <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                <th onclick="sortTable('hemato-tabla',5)" style="cursor:pointer">F. ingreso <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                <th onclick="sortTable('hemato-tabla',6)" style="cursor:pointer">Tiempo <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+              </tr></thead>
+              <tbody id="hemato-tabla"><tr><td colspan="7" class="empty-state">Cargando...</td></tr></tbody>
+            </table>
           </div>
         </div>
 
@@ -1173,6 +1201,7 @@
 <script src="js/sincronizacion.js"></script>
 <script src="js/tuberculosis.js"></script>
 <script src="js/sin-ingreso.js"></script>
+<script src="js/hematologia.js"></script>
 <script src="js/modales.js"></script>
 <script src="js/correo.js"></script>
 <script src="js/revision-pendientes.js"></script>

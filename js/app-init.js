@@ -105,11 +105,13 @@ async function loadMuestras({ force = false, incluirValidadas = false } = {}) {
 
   lastMuestrasLoad = Date.now();
   updateBadge();
+  cargarMarcasHemato();   // OD_ID marcados para rescatar de hematología (consulta pequeña)
 }
 
 function updateBadge() {
   const pend = allMuestras.filter(m => m.estado === 'pendiente' && !m.gestionada).length;
   document.getElementById('badge-pend').textContent = pend;
+  actualizarBadgeHemato();
   // Actualizar badge de sin ingreso si la sección está cargada
   const badge = document.getElementById('badge-sin-ingreso');
   if (badge && badge.style.display !== 'none') loadSinIngreso();

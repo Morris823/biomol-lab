@@ -18,7 +18,11 @@ async function processIngresosFile(file) {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
   setImpProgress(30, 'Detectando formato...');
-  const normalized = rows.map(r => detectAndNormalize(r)).filter(Boolean);
+  const normalized = rows.map(r => detectAndNormalize(r)).filter(Boolean)
+    .filter(r => !esHemoleucograma(r.estudio_codigo, r.estudio_nombre)); // nunca se guardan como ingreso
+  // Hemoleucogramas (1001934): no se guardan como ingreso (el filtro de pruebas ya
+  // los descarta); solo se usan para marcar las pruebas manuales del mismo tubo.
+  const nrosHemo = nrosConHemograma(rows);
 
   // ---- Filtro: muestras que NO son del área y llegan por error de LabCore ----
   // Se excluyen VIH y ciertos VPH cuando vienen de sedes de OTRA regional.
@@ -74,13 +78,15 @@ async function processIngresosFile(file) {
   document.getElementById('imp-dups').textContent = dups;
   document.getElementById('imp-fmt').textContent = rows[0] && 'O_ID' in rows[0] ? 'Formato A' : 'Formato B';
   document.getElementById('imp-result').style.display = 'block';
+  const conHemo = await marcarConHemograma(paraInsertar, nrosHemo);
   await loadMuestras({force:true});
 
   // Buscar recepciones sin ingreso que ahora sí tienen ingreso y actualizarlas
   await reconciliarSinIngreso(paraInsertar.map(r => r.nro_muestra));
 
   toast(`${nuevos} ingresos importados` +
-        (excluidas.length ? ` · ${excluidas.length} omitidos (VIH/VPH de otras regionales)` : ''), 'ok');
+        (excluidas.length ? ` · ${excluidas.length} omitidos (VIH/VPH de otras regionales)` : '') +
+        (conHemo ? ` · ${conHemo} con hemograma para rescatar de hematología` : ''), 'ok');
 }
 
 async function reconciliarSinIngreso(nrosImportados) {
