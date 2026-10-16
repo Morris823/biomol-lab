@@ -539,7 +539,7 @@
             <div style="padding:10px 14px;background:var(--red-bg);border-bottom:0.5px solid var(--red-border);font-size:12px;color:var(--red)">
               <i class="ti ti-info-circle"></i> Estas muestras tienen con el mismo código un <strong>hemoleucograma</strong> y una prueba manual nuestra, y todavía no se han recibido aquí.
               Si la sede mandó un solo tubo, puede estar en hematología: hay que ir por él antes de que lo descarten.
-              Al escanearla en Recepción sale sola de esta lista. Si ya no va a llegar (por ejemplo, le anularon el ingreso), márcala como gestionada.
+              Al escanearla en Recepción sale sola de esta lista. Si ya no va a llegar (por ejemplo, le anularon el ingreso), escribe la nota y márcala como gestionada: queda en verde y deja de contar.
             </div>
             <table>
               <thead><tr>
@@ -550,9 +550,10 @@
                 <th onclick="sortTable('hemato-tabla',4)" style="cursor:pointer">Sede <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
                 <th onclick="sortTable('hemato-tabla',5)" style="cursor:pointer">F. ingreso <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
                 <th onclick="sortTable('hemato-tabla',6)" style="cursor:pointer">Tiempo <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
+                <th>Nota de gestión</th>
                 <th style="text-align:center">Gestionado</th>
               </tr></thead>
-              <tbody id="hemato-tabla"><tr><td colspan="8" class="empty-state">Cargando...</td></tr></tbody>
+              <tbody id="hemato-tabla"><tr><td colspan="9" class="empty-state">Cargando...</td></tr></tbody>
             </table>
           </div>
         </div>
