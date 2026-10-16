@@ -120,9 +120,11 @@ async function loadRescateHemato() {
           <td style="font-size:11px;color:var(--text2)">${m.sede || '—'}</td>
           <td class="mono" data-sort="${m.fecha_ingreso ? new Date(m.fecha_ingreso).getTime() : 0}">${fmt(m.fecha_ingreso)} <span style="font-size:10px;color:var(--text3)">${m.fecha_ingreso ? fmtHora(m.fecha_ingreso) : ''}</span></td>
           <td class="mono" data-sort="${h ?? -1}" style="font-weight:600;color:${color}">${tiempo}</td>
+          <td style="text-align:center"><input type="checkbox" title="Marcar como gestionada (p. ej. ingreso anulado): sale de la lista"
+            onchange="gestionarRescateHemato('${m.nro_muestra}', this)" /></td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="7" class="empty-state">No hay muestras por rescatar de hematología 🎉</td></tr>';
+    : '<tr><td colspan="8" class="empty-state">No hay muestras por rescatar de hematología 🎉</td></tr>';
 }
 
 function copiarCodigosHemato() {
@@ -131,4 +133,17 @@ function copiarCodigosHemato() {
   navigator.clipboard.writeText(codigos.join('\n'))
     .then(() => toast(`${codigos.length} código${codigos.length === 1 ? '' : 's'} copiado${codigos.length === 1 ? '' : 's'}`, 'ok'))
     .catch(() => toast('No se pudo copiar al portapapeles', 'err'));
+}
+
+// Para los casos que ya no van a llegar (p. ej. le anularon el ingreso en LabCore):
+// se quita la marca a mano y el tubo sale de la lista, igual que al escanearlo.
+async function gestionarRescateHemato(nro, chk) {
+  if (!confirm(`¿Marcar ${nro} como gestionada? Saldrá de la lista de rescate.`)) { chk.checked = false; return; }
+  chk.disabled = true;
+  const {error} = await sb.from('ingresos').update({ con_hemograma: false }).eq('nro_muestra', nro).eq('con_hemograma', true);
+  if (error) { toast('Error: ' + error.message, 'err'); chk.checked = false; chk.disabled = false; return; }
+  allMuestras.filter(m => m.nro_muestra === nro).forEach(m => hematoOdIds.delete(m.od_id));
+  actualizarBadgeHemato();
+  toast(`${nro} gestionada — salió de la lista`, 'ok');
+  loadRescateHemato();
 }
