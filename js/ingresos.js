@@ -51,39 +51,67 @@ async function processIngresosFile(file) {
   });
   if (excluidas.length) console.table(excluidas.map(r => ({nro_muestra:r.nro_muestra, sede:r.sede, codigo:r.estudio_codigo, estudio:r.estudio_nombre})));
 
-  setImpProgress(60, `Formato detectado. Insertando ${paraInsertar.length} registros...`);
+  // El mismo OD_ID puede venir repetido dentro del Excel. Si se manda dos veces en
+  // el mismo lote, Supabase rechaza el lote COMPLETO (od_id es único) y se perdían
+  // hasta 50 ingresos de golpe. Se deja una sola fila por OD_ID.
+  const vistosOd = new Set();
+  const unicos = paraInsertar.filter(r => { if (vistosOd.has(r.od_id)) return false; vistosOd.add(r.od_id); return true; });
+  const repetidosArchivo = paraInsertar.length - unicos.length;
+
+  setImpProgress(60, `Formato detectado. Insertando ${unicos.length} registros...`);
   let nuevos = 0, dups = 0;
+  const guardados = new Set();   // nro_muestra con ingreso confirmado en la base (nuevo o ya existente)
+  const fallidos = [];           // filas que no se pudieron guardar, con el motivo
+  const fila = r => ({ ...r, subido_por: currentUser, fecha_ingreso: new Date().toISOString() });
   const BATCH = 50;
-  for (let i = 0; i < paraInsertar.length; i += BATCH) {
-    const batch = paraInsertar.slice(i, i+BATCH);
+  for (let i = 0; i < unicos.length; i += BATCH) {
+    const batch = unicos.slice(i, i+BATCH);
     const ods = batch.map(r => r.od_id);
     const {data: existing} = await sb.from("ingresos").select("od_id").in("od_id", ods);
     const existingSet = new Set((existing||[]).map(r=>r.od_id));
+    batch.filter(r => existingSet.has(r.od_id)).forEach(r => guardados.add(r.nro_muestra));
     const toInsert = batch.filter(r => !existingSet.has(r.od_id));
     dups += batch.length - toInsert.length;
     if (toInsert.length > 0) {
-      const {error} = await sb.from("ingresos").insert(toInsert.map(r => ({
-        ...r,
-        subido_por: currentUser,
-        fecha_ingreso: new Date().toISOString()
-      })));
-      if (error) { console.error("Error batch:", error); toast("Error: "+error.message,"err"); }
-      else nuevos += toInsert.length;
+      const {error} = await sb.from("ingresos").insert(toInsert.map(fila));
+      if (!error) {
+        nuevos += toInsert.length;
+        toInsert.forEach(r => guardados.add(r.nro_muestra));
+      } else {
+        // El lote falló: se reintenta fila por fila para no perder las buenas
+        console.error("Lote rechazado, reintentando fila por fila:", error);
+        for (const r of toInsert) {
+          const {error: e1} = await sb.from("ingresos").insert(fila(r));
+          if (!e1) { nuevos++; guardados.add(r.nro_muestra); }
+          else if (e1.code === '23505') { dups++; guardados.add(r.nro_muestra); } // ya existía
+          else fallidos.push({ od_id: r.od_id, nro_muestra: r.nro_muestra, estudio: r.estudio_nombre, motivo: e1.message });
+        }
+      }
     }
-    setImpProgress(60 + Math.round(((i+BATCH)/paraInsertar.length)*35), `Insertando... ${Math.min(i+BATCH,paraInsertar.length)}/${paraInsertar.length}`);
+    setImpProgress(60 + Math.round(((i+BATCH)/unicos.length)*35), `Insertando... ${Math.min(i+BATCH,unicos.length)}/${unicos.length}`);
   }
-  setImpProgress(100, '¡Importación completada!');
+  setImpProgress(100, fallidos.length ? `Importación con ${fallidos.length} fila(s) sin guardar` : '¡Importación completada!');
   document.getElementById('imp-total').textContent = rows.length;
   document.getElementById('imp-nuevos').textContent = nuevos;
-  document.getElementById('imp-dups').textContent = dups;
+  document.getElementById('imp-dups').textContent = dups + repetidosArchivo;
   document.getElementById('imp-fmt').textContent = rows[0] && 'O_ID' in rows[0] ? 'Formato A' : 'Formato B';
+  const fallEl = document.getElementById('imp-fallidos');
+  if (fallEl) {
+    fallEl.style.display = fallidos.length ? 'block' : 'none';
+    fallEl.innerHTML = fallidos.length ? `<strong><i class="ti ti-alert-triangle"></i> ${fallidos.length} ingreso(s) NO se guardaron.</strong>
+      Vuelve a subir el archivo; si siguen fallando, avísale al biólogo.
+      <div style="margin-top:6px;font-family:var(--mono);font-size:11px;max-height:140px;overflow:auto">${fallidos.map(f => `${f.nro_muestra} · ${f.estudio || ''} — ${f.motivo}`).join('<br>')}</div>` : '';
+  }
+  if (fallidos.length) console.table(fallidos);
   document.getElementById('imp-result').style.display = 'block';
-  const conHemo = await marcarConHemograma(paraInsertar, nrosHemo);
+  const conHemo = await marcarConHemograma(unicos.filter(r => guardados.has(r.nro_muestra)), nrosHemo);
   await loadMuestras({force:true});
 
-  // Buscar recepciones sin ingreso que ahora sí tienen ingreso y actualizarlas
-  await reconciliarSinIngreso(paraInsertar.map(r => r.nro_muestra));
+  // Recepciones "sin ingreso" que ahora sí tienen ingreso: SOLO las de tubos cuyo
+  // ingreso quedó guardado de verdad (antes se marcaban aunque el lote hubiera fallado)
+  await reconciliarSinIngreso([...guardados]);
 
+  if (fallidos.length) toast(`Atención: ${fallidos.length} ingreso(s) no se guardaron — revisa el resultado de la importación`, 'err');
   toast(`${nuevos} ingresos importados` +
         (excluidas.length ? ` · ${excluidas.length} omitidos (VIH/VPH de otras regionales)` : '') +
         (conHemo ? ` · ${conHemo} con hemograma para rescatar de hematología` : ''), 'ok');

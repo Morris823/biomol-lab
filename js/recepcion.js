@@ -86,16 +86,27 @@ async function loadRecepciones() {
   const dataNormal = (data || []).filter(r => !r.es_tb);
   const dataTB = (data || []).filter(r => r.es_tb);
 
+  // Tubos que no están en memoria (allMuestras solo trae estados activos): se buscan
+  // directo en ingresos, en una sola consulta y solo para los de hoy que falten.
+  const faltan = [...new Set(dataNormal.filter(r => !r.sin_ingreso && !allMuestras.some(m => m.nro_muestra === r.nro_muestra)).map(r => r.nro_muestra))];
+  const extra = {};
+  if (faltan.length) {
+    const {data: ing} = await sb.from('ingresos').select('nro_muestra,apellidos,nombres,estudio_nombre,estudio_codigo').in('nro_muestra', faltan);
+    (ing || []).forEach(i => (extra[i.nro_muestra] = extra[i.nro_muestra] || []).push({ ...i, paciente: `${i.apellidos || ''}, ${i.nombres || ''}` }));
+  }
+
   recepciones = dataNormal.map(r => {
     const muestrasRec = allMuestras.filter(m => m.nro_muestra === r.nro_muestra);
-    const pruebasUnicas = [...new Set(muestrasRec.map(m => nombreCorto(m.estudio_nombre, m.estudio_codigo)))];
-    const pac = allMuestras.find(m => m.nro_muestra === r.nro_muestra);
+    const fuente = muestrasRec.length ? muestrasRec : (extra[r.nro_muestra] || []);
+    const pruebasUnicas = [...new Set(fuente.map(m => nombreCorto(m.estudio_nombre, m.estudio_codigo)))];
+    // Sin ningún ingreso en la base = sin ingreso, diga lo que diga la marca guardada
+    const sinIngreso = r.sin_ingreso || fuente.length === 0;
     return {
       hora: new Date(r.fecha_recepcion).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}),
       cod: r.nro_muestra,
-      pac: pac?.paciente || '',
-      pruebas: pruebasUnicas.length ? pruebasUnicas : [r.nro_muestra],
-      sinIngreso: r.sin_ingreso,
+      pac: fuente[0]?.paciente || '',
+      pruebas: pruebasUnicas.length ? pruebasUnicas : ['Sin ingreso en sistema'],
+      sinIngreso,
       user: r.recibido_por
     };
   });
