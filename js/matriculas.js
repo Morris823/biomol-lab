@@ -6,6 +6,55 @@ let posicionesActual = [];    // array de posiciones escaneadas
 
 const PRUEBAS_MANUALES = ['HLA B27','HLA B57','Homocisteina','Hemocromatosis','MTHFR'];
 
+// ---- Color por prueba: para no mezclar el orden de montaje (p. ej. B27, B57, B27) ----
+const COLORES_PRUEBA = {
+  'HLA B27':   ['#1A56DB', '#EBF1FD'],
+  'HLA B57':   ['#6D28D9', '#F1EAFE'],
+  'Homocist.': ['#BE185D', '#FCE7F3'],
+  'Hemocr.':   ['#B45309', '#FEF3C7'],
+  'MTHFR':     ['#0E7490', '#E0F2FE'],
+};
+const PALETA_EXTRA = [['#4D7C0F', '#ECFCCB'], ['#9F1239', '#FFE4E6'], ['#374151', '#F3F4F6']];
+function colorPrueba(nombre) {
+  if (!nombre) return ['#9B9A96', '#F1F1EF'];
+  if (COLORES_PRUEBA[nombre]) return COLORES_PRUEBA[nombre];
+  let h = 0; for (const c of nombre) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return PALETA_EXTRA[h % PALETA_EXTRA.length];
+}
+function chipPruebaMat(nombre) {
+  const [fg, bg] = colorPrueba(nombre);
+  return `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:${bg};color:${fg};border:0.5px solid ${fg}55">${nombre || 'Sin ingreso'}</span>`;
+}
+// Una fila de la tabla de posiciones (la usa el render completo y el de "solo la última")
+function filaPosicion(p) {
+  if (p.es_control) {
+    return { style: 'background:var(--teal-bg)', html: `<td style="font-weight:600;color:var(--teal);text-align:center">${p.posicion}</td>
+      <td class="mono" style="color:var(--teal)">${p.nro_muestra}</td>
+      <td colspan="2" style="font-size:11px;color:var(--teal);font-weight:500"><i class="ti ti-flask-2"></i> ${p.nombre_control||'Control'}</td>
+      <td><span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--teal-bg);color:var(--teal);border:0.5px solid #5EC4A1">Control</span></td>` };
+  }
+  const nombre = p.prueba_corta || p.estudio_nombre || null;
+  const [fg] = colorPrueba(nombre);
+  const alerta = p.alerta_tipo === 'duplicado'
+    ? `<span style="color:var(--red);font-size:10px;font-weight:500"><i class="ti ti-alert-circle"></i> Duplicado exacto</span>`
+    : p.alerta_tipo === 'mismo_paciente'
+    ? `<span style="color:var(--yellow);font-size:10px;font-weight:500"><i class="ti ti-alert-triangle"></i> Mismo paciente</span>`
+    : '';
+  const style = p.alerta_tipo === 'duplicado' ? 'background:var(--red-bg)' : p.alerta_tipo === 'mismo_paciente' ? 'background:var(--yellow-bg)' : '';
+  return { style, html: `<td style="font-weight:600;color:var(--text2);text-align:center;box-shadow:inset 4px 0 0 ${fg}">${p.posicion}</td>
+      <td class="mono">${p.nro_muestra}</td>
+      <td style="font-size:11px">${p.paciente||'—'}</td>
+      <td>${chipPruebaMat(nombre)}</td>
+      <td>${alerta}</td>` };
+}
+// Resumen arriba de la tabla: cuántas de cada prueba, en el orden en que se montaron
+function resumenPruebasMat() {
+  const cuenta = new Map();
+  for (const p of posicionesActual) if (!p.es_control) { const n = p.prueba_corta || p.estudio_nombre || null; cuenta.set(n, (cuenta.get(n) || 0) + 1); }
+  return [...cuenta].map(([n, c]) => `${chipPruebaMat(n)} <span style="font-size:11px;color:var(--text2);margin-right:8px">${c}</span>`).join('');
+}
+function actualizarResumenMat() { const el = document.getElementById('mat-resumen'); if (el) el.innerHTML = resumenPruebasMat(); }
+
 async function initMatriculas() {
   // Buscar si hay una matrícula abierta hoy (día de Colombia)
   const hoy = hoyCO();
@@ -76,26 +125,9 @@ function renderMatriculaActiva(soloAgregarUltima = false) {
     if (tbody) {
       const p = posicionesActual[posicionesActual.length - 1];
       const tr = document.createElement('tr');
-      if (p.es_control) {
-        tr.style.background = 'var(--teal-bg)';
-        tr.innerHTML = `<td style="font-weight:600;color:var(--teal);text-align:center">${p.posicion}</td>
-          <td class="mono" style="color:var(--teal)">${p.nro_muestra}</td>
-          <td colspan="2" style="font-size:11px;color:var(--teal);font-weight:500"><i class="ti ti-flask-2"></i> ${p.nombre_control||'Control'}</td>
-          <td><span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--teal-bg);color:var(--teal);border:0.5px solid #5EC4A1">Control</span></td>`;
-      } else {
-        if (p.alerta_tipo === 'duplicado') tr.style.background = 'var(--red-bg)';
-        else if (p.alerta_tipo === 'mismo_paciente') tr.style.background = 'var(--yellow-bg)';
-        const alerta = p.alerta_tipo === 'duplicado'
-          ? `<span style="color:var(--red);font-size:10px;font-weight:500"><i class="ti ti-alert-circle"></i> Duplicado exacto</span>`
-          : p.alerta_tipo === 'mismo_paciente'
-          ? `<span style="color:var(--yellow);font-size:10px;font-weight:500"><i class="ti ti-alert-triangle"></i> Mismo paciente</span>`
-          : '';
-        tr.innerHTML = `<td style="font-weight:600;color:var(--text2);text-align:center">${p.posicion}</td>
-          <td class="mono">${p.nro_muestra}</td>
-          <td style="font-size:11px">${p.paciente||'—'}</td>
-          <td><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:var(--accent-bg);color:var(--accent)">${p.prueba_corta||p.estudio_nombre||'—'}</span></td>
-          <td>${alerta}</td>`;
-      }
+      const f = filaPosicion(p);
+      if (f.style) tr.setAttribute('style', f.style);
+      tr.innerHTML = f.html;
       // Quitar fila de "empty state" si existe
       const emptyRow = tbody.querySelector('.empty-state');
       if (emptyRow) emptyRow.closest('tr').remove();
@@ -108,6 +140,7 @@ function renderMatriculaActiva(soloAgregarUltima = false) {
       // Actualizar contador de posiciones disponibles
       const restEl = document.getElementById('mat-restantes');
       if (restEl) restEl.textContent = restantes + ' posiciones disponibles';
+      actualizarResumenMat();
       return;
     }
   }
@@ -135,33 +168,13 @@ function renderMatriculaActiva(soloAgregarUltima = false) {
         <button class="btn" onclick="copiarCodigos()" ${total===0?'disabled':''}><i class="ti ti-copy"></i> Copiar códigos</button>
       </div>
     </div>
+    <div id="mat-resumen" style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-bottom:8px">${resumenPruebasMat()}</div>
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
       <table>
         <thead><tr><th style="width:40px">#</th><th>Código / Control</th><th>Paciente</th><th>Prueba</th><th>Alerta</th></tr></thead>
         <tbody id="mat-tbody">
           ${posicionesActual.length
-            ? posicionesActual.map(p => {
-                if (p.es_control) {
-                  return `<tr style="background:var(--teal-bg)">
-                    <td style="font-weight:600;color:var(--teal);text-align:center">${p.posicion}</td>
-                    <td class="mono" style="color:var(--teal)">${p.nro_muestra}</td>
-                    <td colspan="2" style="font-size:11px;color:var(--teal);font-weight:500"><i class="ti ti-flask-2"></i> ${p.nombre_control||'Control'}</td>
-                    <td><span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--teal-bg);color:var(--teal);border:0.5px solid #5EC4A1">Control</span></td>
-                  </tr>`;
-                }
-                const alerta = p.alerta_tipo === 'duplicado'
-                  ? `<span style="color:var(--red);font-size:10px;font-weight:500"><i class="ti ti-alert-circle"></i> Duplicado exacto</span>`
-                  : p.alerta_tipo === 'mismo_paciente'
-                  ? `<span style="color:var(--yellow);font-size:10px;font-weight:500"><i class="ti ti-alert-triangle"></i> Mismo paciente</span>`
-                  : '';
-                return `<tr style="${p.alerta_tipo==='duplicado'?'background:var(--red-bg)':p.alerta_tipo==='mismo_paciente'?'background:var(--yellow-bg)':''}">
-                  <td style="font-weight:600;color:var(--text2);text-align:center">${p.posicion}</td>
-                  <td class="mono">${p.nro_muestra}</td>
-                  <td style="font-size:11px">${p.paciente||'—'}</td>
-                  <td><span style="font-size:10px;padding:2px 7px;border-radius:10px;background:var(--accent-bg);color:var(--accent)">${p.prueba_corta||p.estudio_nombre||'—'}</span></td>
-                  <td>${alerta}</td>
-                </tr>`;
-              }).join('')
+            ? posicionesActual.map(p => { const f = filaPosicion(p); return `<tr style="${f.style}">${f.html}</tr>`; }).join('')
             : '<tr><td colspan="5" class="empty-state">Sin posiciones aún — escanea la primera muestra</td></tr>'
           }
         </tbody>
@@ -226,8 +239,15 @@ async function procesarMatScan(val) {
     fb.className = 'scan-fb sf-dup';
     fb.innerHTML = `<strong><i class="ti ti-alert-triangle"></i> Mismo paciente</strong> — Los primeros 11 dígitos coinciden con la posición <strong>${mismoPaciente.posicion}</strong> (${mismoPaciente.estudio_nombre||mismoPaciente.nro_muestra}). ¿Es correcto?`;
   } else {
-    fb.className = 'scan-fb sf-ok';
-    fb.innerHTML = `<strong><i class="ti ti-circle-check"></i> Posición ${posicion}</strong> — ${ingreso?.paciente||val} · <span style="color:var(--accent)">${data.prueba_corta||data.estudio_nombre||'Sin ingreso'}</span>`;
+    const nombre = data.prueba_corta || data.estudio_nombre || null;
+    const muestrasPrev = posicionesActual.filter(p => !p.es_control && p.id !== data.id);
+    const anterior = muestrasPrev[muestrasPrev.length - 1];
+    const anteriorNombre = anterior ? (anterior.prueba_corta || anterior.estudio_nombre || null) : null;
+    // Rompe el orden si vuelve a una prueba que ya se había montado antes de otra distinta
+    const rompeOrden = nombre && anterior && anteriorNombre !== nombre && muestrasPrev.some(p => (p.prueba_corta || p.estudio_nombre) === nombre);
+    fb.className = rompeOrden ? 'scan-fb sf-dup' : 'scan-fb sf-ok';
+    fb.innerHTML = `<strong><i class="ti ti-circle-check"></i> Posición ${posicion}</strong> — ${ingreso?.paciente||val} · ${chipPruebaMat(nombre)}` +
+      (rompeOrden ? `<div style="font-size:11px;margin-top:4px"><i class="ti ti-arrows-shuffle"></i> Ojo con el orden: ya habías montado <strong>${nombre}</strong> antes de <strong>${anteriorNombre}</strong>. Si fue a propósito, sigue; si no, usa <em>Quitar última</em>.</div>` : '');
   }
 
   renderMatriculaActiva(true); // solo agregar la última fila, sin mover el scroll

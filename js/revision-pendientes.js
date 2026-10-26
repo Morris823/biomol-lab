@@ -6,6 +6,20 @@ let segRows = { manuales: [], tb: [] };
 // nro_muestra -> {nombre: 'MAT-20260101-001', veces: 1}  (la matrícula/corrida más reciente)
 let enMatriculaGlobal = new Map();
 let enCorridaTBGlobal = new Map();
+// Datos de tubos que están en la revisión pero NO en allMuestras (que solo trae estados
+// activos). Sin esto, un tubo con ingreso salía sin paciente/prueba/sede, como si no
+// tuviera ingreso, y al ir a hacer el ingreso manual decía que ya existía.
+let segExtra = new Map();
+const muestraSeg = nro => allMuestras.find(m => m.nro_muestra === nro) || segExtra.get(nro);
+
+async function cargarSegExtra(nros) {
+  const faltan = [...new Set((nros || []).filter(n => n && !allMuestras.some(m => m.nro_muestra === n)))];
+  for (let i = 0; i < faltan.length; i += 100) {
+    const {data, error} = await sb.from('v_muestras').select(COLS_MUESTRAS).in('nro_muestra', faltan.slice(i, i + 100));
+    if (error) { console.error('Error cargando datos de revisión:', error); continue; }
+    for (const m of (data || [])) if (!segExtra.has(m.nro_muestra)) segExtra.set(m.nro_muestra, m);
+  }
+}
 
 // Antes se traían TODAS las posiciones sin filtro, y PostgREST corta en 1000 filas:
 // por eso las muestras de matrículas viejas dejaban de decir "En matrícula". Ahora se
@@ -77,6 +91,7 @@ async function cargarSeguimiento(area) {
   }
 
   const nrosSeg = segRows[area].map(r => r.nro_muestra);
+  await cargarSegExtra(segRows[area].filter(r => r.estado !== 'validado').map(r => r.nro_muestra));
   if (area === 'manuales') {
     await cargarEnMatriculaGlobal(nrosSeg);
   } else {
@@ -131,7 +146,7 @@ function renderSegTabla(area) {
   const q = (document.getElementById(`seg-buscar-${area}`)?.value || '').trim().toLowerCase();
   if (q) {
     rows = rows.filter(r => {
-      const muestra = allMuestras.find(m => m.nro_muestra === r.nro_muestra);
+      const muestra = muestraSeg(r.nro_muestra);
       return r.nro_muestra?.toLowerCase().includes(q) ||
              (muestra?.paciente || '').toLowerCase().includes(q) ||
              (r.estudio_nombre || '').toLowerCase().includes(q) ||
@@ -147,7 +162,7 @@ function renderSegTabla(area) {
   // Usa la MISMA cuenta de días que se muestra en la columna (mismo fechaRef/hoyISO).
   const estadoRank = e => e === 'pendiente' ? 0 : e === 'gestionado' ? 1 : e === 'validado' ? 2 : 3;
   const deco = rows.map(r => {
-    const muestra = allMuestras.find(m => m.nro_muestra === r.nro_muestra);
+    const muestra = muestraSeg(r.nro_muestra);
     const fechaRef = muestra?.fecha_recepcion || muestra?.fecha_ingreso;
     const dias = fechaRef ? diasHabilesGlobal(new Date(fechaRef).toISOString().slice(0,10), hoyISO) : null;
     return {
@@ -179,7 +194,7 @@ function renderSegTabla(area) {
   }
 
   tbody.innerHTML = rows.map(r => {
-    const muestra = allMuestras.find(m => m.nro_muestra === r.nro_muestra);
+    const muestra = muestraSeg(r.nro_muestra);
     const notaAux = muestra?.gestion || '—';
     const fechaRef = muestra?.fecha_recepcion || muestra?.fecha_ingreso;
     const prueba = muestra ? nombreCorto(muestra.estudio_nombre, muestra.estudio_codigo) : (r.estudio_nombre || '—');
