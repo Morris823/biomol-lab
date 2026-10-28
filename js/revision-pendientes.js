@@ -65,8 +65,10 @@ function chipSeg(el, val, area) {
 }
 
 async function cargarSeguimiento(area) {
+  // Las validadas ya no se descargan: son historial que nadie consulta aquí y era lo
+  // que más pesaba (crece todos los días). Se revisan solo pendientes y gestionadas.
   const {data} = await sb.from('seguimiento_manuales')
-    .select('*').eq('area', area).order('fecha', { ascending: false });
+    .select('*').eq('area', area).neq('estado', 'validado').order('fecha', { ascending: false });
   segRows[area] = data || [];
 
   // Verificar cuáles están validadas en BD aunque no estén en allMuestras.
@@ -152,11 +154,10 @@ function renderSegTabla(area) {
   const hoy = new Date();
   const hoyISO = hoy.toISOString().slice(0,10);
 
-  // Todos = sin gestionar + gestionados (los validados aparte, como historial)
+  // Todos = sin gestionar + gestionados
   const f = segFiltro[area];
   let rows = f === 'sin' ? segRows[area].filter(r => r.estado === 'pendiente')
            : f === 'ges' ? segRows[area].filter(r => r.estado === 'gestionado')
-           : f === 'val' ? segRows[area].filter(r => r.estado === 'validado')
            : segRows[area].filter(r => r.estado !== 'validado');
 
   const q = (document.getElementById(`seg-buscar-${area}`)?.value || '').trim().toLowerCase();
@@ -205,7 +206,7 @@ function renderSegTabla(area) {
   if (!tbody) return;
 
   if (!rows.length) {
-    const vacio = { activos: 'Sin pendientes activos 🎉', sin: 'Nada sin gestionar 🎉', ges: 'No hay gestionados', val: 'No hay validados' };
+    const vacio = { activos: 'Sin pendientes activos 🎉', sin: 'Nada sin gestionar 🎉', ges: 'No hay gestionados' };
     tbody.innerHTML = `<tr><td colspan="11" class="empty-state">${vacio[segFiltro[area]] || 'Sin registros de revisión'}</td></tr>`;
     return;
   }
