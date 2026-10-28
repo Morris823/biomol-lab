@@ -8,6 +8,8 @@ function onScanInput(val) {
 
 async function processScan(val) {
   document.getElementById('scan-in').value = '';
+  const original = val;
+  val = resolverTubo(val);   // segundo tubo de una orden -> código principal
   const fb = document.getElementById('scan-fb');
   // Verificar duplicado en sesión actual — advertir pero NO bloquear
   const alreadyThis = recepciones.find(r => r.cod === val);
@@ -63,6 +65,7 @@ async function processScan(val) {
       ${nombresPruebas.length>1?`<div style="margin-top:5px;font-size:10px;color:var(--teal)"><i class="ti ti-stack-2"></i> Este tubo tiene <strong>${nombresPruebas.length} pruebas</strong></div>`:''}`;
   }
   }
+  fb.innerHTML += notaTuboAdicional(original, val);
 
   await loadMuestras({force:true});
   renderRecepcion();

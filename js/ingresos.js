@@ -9,6 +9,23 @@ function handleDrop(e) {
 }
 function handleFileInput(e) { processIngresosFile(e.target.files[0]); }
 
+// ---- Órdenes con dos tubos (mismo OD_ID, dos códigos de LabCore) ----
+// LabCore exporta una fila por tubo con el MISMO OD_ID (pasa sobre todo en Homocisteína).
+// El ingreso se guarda una sola vez, con el tubo de número menor (el "principal"), y el
+// otro código queda en tubos_adicionales. Los escáneres convierten el tubo adicional
+// en el principal con resolverTubo(), así nunca cae en "Sin ingreso".
+let tubosAdicionales = new Map();   // código adicional -> código principal
+
+async function cargarTubosAdicionales() {
+  const {data, error} = await sb.from('tubos_adicionales').select('nro_muestra,nro_principal');
+  if (error) return; // si la tabla aún no existe, todo sigue funcionando como antes
+  tubosAdicionales = new Map((data || []).map(t => [t.nro_muestra, t.nro_principal]));
+}
+const resolverTubo = cod => tubosAdicionales.get(String(cod || '').trim()) || cod;
+const notaTuboAdicional = (original, principal) => original !== principal
+  ? `<div style="font-size:11px;margin-top:4px;color:var(--accent)"><i class="ti ti-link"></i> <strong>${original}</strong> es el segundo tubo de la orden <strong>${principal}</strong> (mismo OD_ID): se registró con el código principal.</div>`
+  : '';
+
 async function processIngresosFile(file) {
   document.getElementById('imp-prog').style.display = 'block';
   document.getElementById('imp-result').style.display = 'none';
@@ -54,8 +71,13 @@ async function processIngresosFile(file) {
   // El mismo OD_ID puede venir repetido dentro del Excel. Si se manda dos veces en
   // el mismo lote, Supabase rechaza el lote COMPLETO (od_id es único) y se perdían
   // hasta 50 ingresos de golpe. Se deja una sola fila por OD_ID.
+  // Si se repite con OTRO código de tubo, es una orden con dos tubos: se guarda el de
+  // número menor como principal y los demás se registran como tubos adicionales.
+  const tubosPorOd = new Map();
+  for (const r of paraInsertar) { if (!tubosPorOd.has(r.od_id)) tubosPorOd.set(r.od_id, new Set()); tubosPorOd.get(r.od_id).add(r.nro_muestra); }
+  const ordenados = [...paraInsertar].sort((a, b) => String(a.nro_muestra).localeCompare(String(b.nro_muestra)));
   const vistosOd = new Set();
-  const unicos = paraInsertar.filter(r => { if (vistosOd.has(r.od_id)) return false; vistosOd.add(r.od_id); return true; });
+  const unicos = ordenados.filter(r => { if (vistosOd.has(r.od_id)) return false; vistosOd.add(r.od_id); return true; });
   const repetidosArchivo = paraInsertar.length - unicos.length;
 
   setImpProgress(60, `Formato detectado. Insertando ${unicos.length} registros...`);
@@ -107,14 +129,42 @@ async function processIngresosFile(file) {
   const conHemo = await marcarConHemograma(unicos.filter(r => guardados.has(r.nro_muestra)), nrosHemo);
   await loadMuestras({force:true});
 
+  const nTubos2 = await registrarTubosAdicionales(tubosPorOd);
+
   // Recepciones "sin ingreso" que ahora sí tienen ingreso: SOLO las de tubos cuyo
   // ingreso quedó guardado de verdad (antes se marcaban aunque el lote hubiera fallado)
   await reconciliarSinIngreso([...guardados]);
 
   if (fallidos.length) toast(`Atención: ${fallidos.length} ingreso(s) no se guardaron — revisa el resultado de la importación`, 'err');
   toast(`${nuevos} ingresos importados` +
+        (nTubos2 ? ` · ${nTubos2} segundo(s) tubo(s) de la misma orden` : '') +
         (excluidas.length ? ` · ${excluidas.length} omitidos (VIH/VPH de otras regionales)` : '') +
         (conHemo ? ` · ${conHemo} con hemograma para rescatar de hematología` : ''), 'ok');
+}
+
+// Guarda los tubos adicionales de órdenes con dos tubos. El principal es el código
+// con el que quedó el ingreso en la base (si ya existía de antes, se respeta ese).
+async function registrarTubosAdicionales(tubosPorOd) {
+  const multi = [...tubosPorOd].filter(([, nros]) => nros.size > 1);
+  if (!multi.length) return 0;
+  const ods = multi.map(([od]) => od);
+  const {data: ings} = await sb.from('ingresos').select('od_id,nro_muestra').in('od_id', ods);
+  const principalDe = new Map((ings || []).map(i => [i.od_id, i.nro_muestra]));
+  const filas = [];
+  for (const [od, nros] of multi) {
+    const principal = principalDe.get(od);
+    if (!principal) continue; // el ingreso no se guardó: queda en el recuadro rojo
+    for (const n of nros) if (n !== principal) filas.push({ nro_muestra: n, nro_principal: principal, od_id: od });
+  }
+  if (!filas.length) return 0;
+  const {error} = await sb.from('tubos_adicionales').upsert(filas, { onConflict: 'nro_muestra' });
+  if (error) { console.error('Error guardando tubos adicionales:', error); toast('No se pudieron guardar los segundos tubos: ' + error.message, 'err'); return 0; }
+  filas.forEach(f => tubosAdicionales.set(f.nro_muestra, f.nro_principal));
+  // Si el segundo tubo ya se había escaneado (quedó "sin ingreso"), pasa al código principal
+  for (const f of filas) {
+    await sb.from('recepciones').update({ nro_muestra: f.nro_principal, sin_ingreso: false }).eq('nro_muestra', f.nro_muestra);
+  }
+  return filas.length;
 }
 
 async function reconciliarSinIngreso(nrosImportados) {

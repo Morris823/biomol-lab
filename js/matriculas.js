@@ -191,6 +191,8 @@ function onMatScanInput(val) {
 }
 
 async function procesarMatScan(val) {
+  const original = val;
+  val = resolverTubo(val);   // segundo tubo de una orden -> código principal
   const input = document.getElementById('mat-scan-in');
   const fb = document.getElementById('mat-scan-fb');
   if (input) input.value = '';
@@ -250,6 +252,7 @@ async function procesarMatScan(val) {
       (rompeOrden ? `<div style="font-size:11px;margin-top:4px"><i class="ti ti-arrows-shuffle"></i> Ojo con el orden: ya habías montado <strong>${nombre}</strong> antes de <strong>${anteriorNombre}</strong>. Si fue a propósito, sigue; si no, usa <em>Quitar última</em>.</div>` : '');
   }
 
+  fb.innerHTML += notaTuboAdicional(original, val);
   renderMatriculaActiva(true); // solo agregar la última fila, sin mover el scroll
 }
 

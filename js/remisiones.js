@@ -325,6 +325,7 @@ function onRemScanInput(val) {
 }
 
 async function procesarScanRemision(codigo) {
+  codigo = resolverTubo(codigo);   // segundo tubo de una orden -> código principal
   document.getElementById('rem-scan-in').value = '';
   const fb = document.getElementById('rem-scan-fb');
 

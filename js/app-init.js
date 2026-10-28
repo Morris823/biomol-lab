@@ -6,6 +6,7 @@ let pruebasData = [];
 
 async function initApp() {
   await loadPruebas();
+  await cargarTubosAdicionales();
   // Cargar gestiones marcadas para preservarlas en memoria.
   // Paginar: Supabase devuelve máx. 1000 filas por consulta. Sin este loop,
   // con >1000 gestionadas las que sobran no se cargaban y aparecían como

@@ -415,3 +415,18 @@ create index if not exists idx_remision_posiciones_remision_id on public.remisio
 create index if not exists idx_matricula_posiciones_nro on public.matricula_posiciones (nro_muestra);
 create index if not exists idx_corrida_tb_posiciones_nro on public.corrida_tb_posiciones (nro_muestra);
 create index if not exists idx_seguimiento_manuales_nro on public.seguimiento_manuales (nro_muestra);
+
+
+-- ============================================================
+-- Órdenes con dos tubos: LabCore exporta el mismo OD_ID con dos códigos de muestra.
+-- El ingreso se guarda una vez (código principal); el otro código queda aquí.
+-- ============================================================
+create table if not exists public.tubos_adicionales (
+  nro_muestra text primary key,        -- código del tubo adicional
+  nro_principal text not null,         -- código con el que quedó el ingreso
+  od_id text,
+  created_at timestamptz default now()
+);
+alter table public.tubos_adicionales enable row level security;
+drop policy if exists acceso_app on public.tubos_adicionales;
+create policy acceso_app on public.tubos_adicionales for all to public using (true);

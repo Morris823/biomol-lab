@@ -141,6 +141,7 @@ function onRepCodInput(val) {
 async function buscarPruebasRep(cod) {
   if (cod === repCodBuscado) return;
   repCodBuscado = cod;
+  cod = resolverTubo(cod);   // segundo tubo de una orden -> código principal
   // 1. Lo que ya está en memoria (no gasta egress)
   let filas = allMuestras.filter(m => m.nro_muestra === cod || m.od_id === cod)
     .map(m => ({ od_id: m.od_id, estudio_nombre: m.estudio_nombre, estudio_codigo: m.estudio_codigo }));

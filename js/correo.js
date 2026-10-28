@@ -19,6 +19,7 @@ function onCorreoScanInput(val) {
 }
 
 function procesarCorreoScan(val) {
+  val = resolverTubo(val);   // segundo tubo de una orden -> código principal
   document.getElementById('correo-scan-in').value = '';
   const fb = document.getElementById('correo-scan-fb');
 
