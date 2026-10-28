@@ -6,6 +6,8 @@ let segRows = { manuales: [], tb: [] };
 // nro_muestra -> {nombre: 'MAT-20260101-001', veces: 1}  (la matrícula/corrida más reciente)
 let enMatriculaGlobal = new Map();
 let enCorridaTBGlobal = new Map();
+let enRemisionGlobal = new Map();   // nro_muestra -> {nombre: código de remisión, veces}
+const OBS_REMITIDA = 'Remitida a Colcan';
 // Datos de tubos que están en la revisión pero NO en allMuestras (que solo trae estados
 // activos). Sin esto, un tubo con ingreso salía sin paciente/prueba/sede, como si no
 // tuviera ingreso, y al ir a hacer el ingreso manual decía que ya existía.
@@ -25,16 +27,16 @@ async function cargarSegExtra(nros) {
 // por eso las muestras de matrículas viejas dejaban de decir "En matrícula". Ahora se
 // consulta solo por los códigos que están en la lista de revisión, así no depende de
 // la antigüedad de la matrícula y además se descarga muchísimo menos.
-async function cargarGrupoGlobal(tabla, relacion, campoNombre, nros) {
+async function cargarGrupoGlobal(tabla, relacion, campoNombre, nros, conControles = true) {
   const mapa = new Map();
   const unicos = [...new Set((nros || []).filter(Boolean))];
   for (let i = 0; i < unicos.length; i += 100) {
     const chunk = unicos.slice(i, i + 100);
-    const {data, error} = await sb.from(tabla)
+    let q = sb.from(tabla)
       .select(`nro_muestra,created_at,${relacion}(${campoNombre})`)
-      .in('nro_muestra', chunk)
-      .eq('es_control', false)
-      .order('created_at', {ascending: true});
+      .in('nro_muestra', chunk);
+    if (conControles) q = q.eq('es_control', false);   // remision_posiciones no tiene controles
+    const {data, error} = await q.order('created_at', {ascending: true});
     if (error) { console.error('Error cargando ' + tabla + ':', error); continue; }
     for (const p of (data || [])) {
       if (!p.nro_muestra) continue;
@@ -51,6 +53,10 @@ async function cargarGrupoGlobal(tabla, relacion, campoNombre, nros) {
 
 async function cargarEnMatriculaGlobal(nros) {
   enMatriculaGlobal = await cargarGrupoGlobal('matricula_posiciones', 'matriculas', 'mat_id', nros);
+}
+
+async function cargarEnRemisionGlobal(nros) {
+  enRemisionGlobal = await cargarGrupoGlobal('remision_posiciones', 'remisiones', 'codigo_remision', nros, false);
 }
 
 async function cargarEnCorridaTBGlobal(nros) {
@@ -109,6 +115,7 @@ async function cargarSeguimiento(area) {
   await cargarSegExtra(segRows[area].filter(r => r.estado !== 'validado').map(r => r.nro_muestra));
   if (area === 'manuales') {
     await cargarEnMatriculaGlobal(nrosSeg);
+    await cargarEnRemisionGlobal(nrosSeg);
   } else {
     await cargarEnCorridaTBGlobal(nrosSeg);
   }
@@ -117,11 +124,15 @@ async function cargarSeguimiento(area) {
   // El caso de "ya tiene algo escrito" se resuelve en el momento del escaneo
   // (ver marcarSeguimientoEnProceso), no aquí, para no borrar en cada recarga una
   // nota que se haya escrito DESPUÉS de que la muestra entró a proceso.
+  // Si está en una remisión, la observación es "Remitida a Colcan" (gana sobre "En proceso")
   const setGrupo = area === 'manuales' ? enMatriculaGlobal : enCorridaTBGlobal;
   for (const r of segRows[area]) {
-    if (!r.observacion && setGrupo.has(r.nro_muestra)) {
-      await sb.from('seguimiento_manuales').update({ observacion: 'En proceso' }).eq('id', r.id);
-      r.observacion = 'En proceso';
+    let nueva = null;
+    if (area === 'manuales' && enRemisionGlobal.has(r.nro_muestra) && (!r.observacion || r.observacion === 'En proceso')) nueva = OBS_REMITIDA;
+    else if (!r.observacion && setGrupo.has(r.nro_muestra)) nueva = 'En proceso';
+    if (nueva) {
+      await sb.from('seguimiento_manuales').update({ observacion: nueva }).eq('id', r.id);
+      r.observacion = nueva;
     }
   }
 
@@ -134,19 +145,29 @@ async function cargarSeguimiento(area) {
 // ("pendiente de llamar", "sin muestra", etc.) ya no aplica.
 // No toca los seguimientos ya validados ni los que ya dicen "En proceso".
 async function marcarSeguimientoEnProceso(nroMuestra, area) {
+  return marcarSeguimientoConNota(nroMuestra, area, 'En proceso', [OBS_REMITIDA]);
+}
+
+// Al agregar una muestra a una remisión, su seguimiento de manuales pasa a "Remitida a Colcan"
+async function marcarSeguimientoRemitida(nroMuestra) {
+  return marcarSeguimientoConNota(nroMuestra, 'manuales', OBS_REMITIDA);
+}
+
+// Pone la nota en los seguimientos no validados de ese tubo. `respetar`: notas que no se pisan.
+async function marcarSeguimientoConNota(nroMuestra, area, nota, respetar = []) {
   if (!nroMuestra) return 0;
   const {data, error} = await sb.from('seguimiento_manuales')
     .select('id,estado,observacion').eq('nro_muestra', nroMuestra).eq('area', area);
   if (error) { console.error('Error buscando seguimiento:', error); return 0; }
-  const objetivo = (data || []).filter(r => r.estado !== 'validado' && r.observacion !== 'En proceso');
+  const objetivo = (data || []).filter(r => r.estado !== 'validado' && r.observacion !== nota && !respetar.includes(r.observacion));
   if (!objetivo.length) return 0;
   const ids = objetivo.map(r => r.id);
   const {error: errUpd} = await sb.from('seguimiento_manuales')
-    .update({ observacion: 'En proceso' }).in('id', ids);
-  if (errUpd) { console.error('Error marcando En proceso:', errUpd); return 0; }
+    .update({ observacion: nota }).in('id', ids);
+  if (errUpd) { console.error('Error marcando seguimiento:', errUpd); return 0; }
   // Reflejarlo en memoria por si la sección de revisión ya está cargada
   const lista = segRows[area] || [];
-  for (const r of lista) if (ids.includes(r.id)) r.observacion = 'En proceso';
+  for (const r of lista) if (ids.includes(r.id)) r.observacion = nota;
   return ids.length;
 }
 
@@ -224,6 +245,8 @@ function renderSegTabla(area) {
       ? enMatriculaGlobal.get(r.nro_muestra)
       : enCorridaTBGlobal.get(r.nro_muestra);
     const enGrupo = !!grupoInfo;
+    const remInfo = area === 'manuales' ? enRemisionGlobal.get(r.nro_muestra) : null;
+    const etiquetaRem = remInfo ? 'En remisión' + (remInfo.nombre ? ' ' + remInfo.nombre : '') + (remInfo.veces > 1 ? ` · ${remInfo.veces}ª vez` : '') : '';
     // Se muestra el nombre de la matrícula/corrida y, si estuvo en más de una, cuántas veces
     const etiquetaGrupo = (area === 'manuales' ? 'En matrícula' : 'En corrida TB')
       + (grupoInfo?.nombre ? ' ' + grupoInfo.nombre : '')
@@ -231,6 +254,7 @@ function renderSegTabla(area) {
 
     const rowBg = r.tipo === 'fantasma' ? 'background:var(--red-bg)'
       : r.estado === 'gestionado' ? 'background:var(--yellow-bg)'
+      : remInfo ? 'background:var(--purple-bg)'
       : enGrupo ? 'background:var(--green-bg)' : '';
 
     const estiloRecepcion = enRecepcion
@@ -239,7 +263,7 @@ function renderSegTabla(area) {
 
     return `<tr style="${rowBg}">
       <td class="mono">${r.nro_muestra}</td>
-      <td style="font-size:11px">${muestra?.paciente || '—'}${enGrupo ? ` <span style="font-size:9px;color:var(--green);border:0.5px solid var(--green-border);padding:1px 5px;border-radius:8px;background:var(--green-bg)">${etiquetaGrupo}</span>` : ''}</td>
+      <td style="font-size:11px">${muestra?.paciente || '—'}${enGrupo ? ` <span style="font-size:9px;color:var(--green);border:0.5px solid var(--green-border);padding:1px 5px;border-radius:8px;background:var(--green-bg)">${etiquetaGrupo}</span>` : ''}${remInfo ? ` <span style="font-size:9px;color:var(--purple);border:0.5px solid #B6B1F0;padding:1px 5px;border-radius:8px;background:var(--purple-bg)"><i class="ti ti-send"></i> ${etiquetaRem}</span>` : ''}</td>
       <td style="font-size:11px">${prueba}</td>
       <td style="font-size:11px;color:var(--text2)">${muestra?.sede || '—'}</td>
       <td style="text-align:center">

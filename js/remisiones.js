@@ -366,6 +366,8 @@ async function procesarScanRemision(codigo) {
   if (error) { toast('Error: ' + error.message, 'err'); return; }
 
   posicionesRemision.push(data);
+  // Si estaba en Revisión de pendientes de manuales, su observación pasa a "Remitida a Colcan"
+  marcarSeguimientoRemitida(codigo).catch(e => console.error(e));
   if (muestra) {
     fb.className = 'scan-fb sf-ok';
     fb.innerHTML = `<i class="ti ti-circle-check"></i> <strong>${muestra.paciente||codigo}</strong> agregada a la remisión`;
