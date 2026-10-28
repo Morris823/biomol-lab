@@ -69,8 +69,10 @@ async function cargarSeguimiento(area) {
     .select('*').eq('area', area).order('fecha', { ascending: false });
   segRows[area] = data || [];
 
-  // Verificar cuáles están validadas en BD aunque no estén en allMuestras
-  const pendientes = segRows[area].filter(r => r.estado !== 'validado' && r.estado !== 'gestionado');
+  // Verificar cuáles están validadas en BD aunque no estén en allMuestras.
+  // Incluye las 'gestionado': si después de gestionarla la muestra se validó, el
+  // validado manda (antes se quedaban en la lista para siempre).
+  const pendientes = segRows[area].filter(r => r.estado !== 'validado');
   if (pendientes.length) {
     const nros = [...new Set(pendientes.map(r => r.nro_muestra).filter(Boolean))];
     const {data: ings} = await sb.from('ingresos').select('od_id,nro_muestra').in('nro_muestra', nros);
