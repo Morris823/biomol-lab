@@ -534,11 +534,19 @@
             <div class="panel-header">
               <span class="panel-title"><i class="ti ti-droplet"></i> Rescatar de hematología</span>
               <span style="font-size:11px;color:var(--text3);flex:1;margin-left:6px" id="hemato-count"></span>
+              <div class="chips">
+                <span class="chip active" onclick="chipHemato(this,'todas')">Todas</span>
+                <span class="chip" onclick="chipHemato(this,'sin')">Sin gestionar</span>
+                <span class="chip" onclick="chipHemato(this,'ges')">Gestionadas</span>
+              </div>
+              <button class="btn" onclick="document.getElementById('hemato-file').click()" title="Excel de LabCore solo con los hemoleucogramas"><i class="ti ti-upload"></i> Subir hemogramas</button>
+              <input type="file" id="hemato-file" accept=".xlsx,.xls" style="display:none" onchange="procesarHemogramas(event)" />
               <button class="btn" id="hemato-copiar" onclick="copiarCodigosHemato()"><i class="ti ti-copy"></i> Copiar códigos</button>
             </div>
             <div style="padding:10px 14px;background:var(--red-bg);border-bottom:0.5px solid var(--red-border);font-size:12px;color:var(--red)">
               <i class="ti ti-info-circle"></i> Estas muestras tienen con el mismo código un <strong>hemoleucograma</strong> y una prueba manual nuestra, y todavía no se han recibido aquí.
               Si la sede mandó un solo tubo, puede estar en hematología: hay que ir por él antes de que lo descarten.
+              <strong>Subir hemogramas:</strong> descarga de LabCore el Excel solo de hematología y súbelo aquí <strong>después</strong> de los ingresos del mismo corte; el archivo no se guarda, solo se cruza.
               Al escanearla en Recepción sale sola de esta lista. Si ya no va a llegar (por ejemplo, le anularon el ingreso), escribe la nota y márcala como gestionada: queda en verde y deja de contar.
             </div>
             <table>
@@ -745,8 +753,10 @@
                 style="margin-left:12px;width:220px;font-size:11px;padding:3px 8px"
                 oninput="renderSegTabla('manuales')" />
               <div class="chips" style="margin-left:auto">
-                <span class="chip active" id="seg-chip-activos-manuales" onclick="chipSeg(this,'activos','manuales')">Activos</span>
-                <span class="chip" id="seg-chip-todos-manuales" onclick="chipSeg(this,'todos','manuales')">Todos</span>
+                <span class="chip active" id="seg-chip-activos-manuales" onclick="chipSeg(this,'activos','manuales')" title="Sin gestionar + gestionados">Todos</span>
+                <span class="chip" id="seg-chip-sin-manuales" onclick="chipSeg(this,'sin','manuales')">Sin gestionar</span>
+                <span class="chip" id="seg-chip-ges-manuales" onclick="chipSeg(this,'ges','manuales')">Gestionados</span>
+                <span class="chip" id="seg-chip-val-manuales" onclick="chipSeg(this,'val','manuales')">Validados</span>
               </div>
             </div>
             <div style="padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
@@ -810,8 +820,10 @@
                 style="margin-left:12px;width:220px;font-size:11px;padding:3px 8px"
                 oninput="renderSegTabla('tb')" />
               <div class="chips" style="margin-left:auto">
-                <span class="chip active" id="seg-chip-activos-tb" onclick="chipSeg(this,'activos','tb')">Activos</span>
-                <span class="chip" id="seg-chip-todos-tb" onclick="chipSeg(this,'todos','tb')">Todos</span>
+                <span class="chip active" id="seg-chip-activos-tb" onclick="chipSeg(this,'activos','tb')" title="Sin gestionar + gestionados">Todos</span>
+                <span class="chip" id="seg-chip-sin-tb" onclick="chipSeg(this,'sin','tb')">Sin gestionar</span>
+                <span class="chip" id="seg-chip-ges-tb" onclick="chipSeg(this,'ges','tb')">Gestionados</span>
+                <span class="chip" id="seg-chip-val-tb" onclick="chipSeg(this,'val','tb')">Validados</span>
               </div>
             </div>
             <div style="padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;font-size:11px">

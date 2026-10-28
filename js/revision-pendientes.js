@@ -152,9 +152,12 @@ function renderSegTabla(area) {
   const hoy = new Date();
   const hoyISO = hoy.toISOString().slice(0,10);
 
-  let rows = segFiltro[area] === 'activos'
-    ? segRows[area].filter(r => r.estado !== 'validado')
-    : segRows[area];
+  // Todos = sin gestionar + gestionados (los validados aparte, como historial)
+  const f = segFiltro[area];
+  let rows = f === 'sin' ? segRows[area].filter(r => r.estado === 'pendiente')
+           : f === 'ges' ? segRows[area].filter(r => r.estado === 'gestionado')
+           : f === 'val' ? segRows[area].filter(r => r.estado === 'validado')
+           : segRows[area].filter(r => r.estado !== 'validado');
 
   const q = (document.getElementById(`seg-buscar-${area}`)?.value || '').trim().toLowerCase();
   if (q) {
@@ -202,7 +205,8 @@ function renderSegTabla(area) {
   if (!tbody) return;
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="11" class="empty-state">${segFiltro[area] === 'activos' ? 'Sin pendientes activos 🎉' : 'Sin registros de revisión'}</td></tr>`;
+    const vacio = { activos: 'Sin pendientes activos 🎉', sin: 'Nada sin gestionar 🎉', ges: 'No hay gestionados', val: 'No hay validados' };
+    tbody.innerHTML = `<tr><td colspan="11" class="empty-state">${vacio[segFiltro[area]] || 'Sin registros de revisión'}</td></tr>`;
     return;
   }
 

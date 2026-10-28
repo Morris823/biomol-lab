@@ -13,6 +13,7 @@
 const COD_HEMOLEUCOGRAMA = '1001934';
 const PRUEBAS_MANUALES_SANGRE = new Set(['HLA B27', 'HLA B57', 'Hemocr.', 'MTHFR', 'Homocist.']);
 let hematoOdIds = new Set();   // OD_ID de los ingresos marcados con hemograma
+let hematoFiltro = 'todas';    // 'todas' | 'sin' | 'ges'
 
 function esHemoleucograma(codigo, nombre) {
   if (String(codigo || '').trim() === COD_HEMOLEUCOGRAMA) return true;
@@ -108,10 +109,12 @@ async function loadRescateHemato() {
     if (m.gestion && !t.nota) t.nota = m.gestion;
   });
   // Primero las que faltan por gestionar (más antiguas arriba); las gestionadas al final
-  const filas = [...porTubo.values()].sort((a, b) => (a.gestionada - b.gestionada) || (new Date(a.m.fecha_ingreso) - new Date(b.m.fecha_ingreso)));
-  const faltan = filas.filter(f => !f.gestionada).length;
+  const todas = [...porTubo.values()].sort((a, b) => (a.gestionada - b.gestionada) || (new Date(a.m.fecha_ingreso) - new Date(b.m.fecha_ingreso)));
+  const faltan = todas.filter(f => !f.gestionada).length;
+  const filas = hematoFiltro === 'sin' ? todas.filter(f => !f.gestionada)
+              : hematoFiltro === 'ges' ? todas.filter(f => f.gestionada) : todas;
   document.getElementById('hemato-count').textContent =
-    `${faltan} por rescatar` + (filas.length > faltan ? ` · ${filas.length - faltan} gestionada${filas.length - faltan === 1 ? '' : 's'}` : '');
+    `${faltan} por rescatar` + (todas.length > faltan ? ` · ${todas.length - faltan} gestionada${todas.length - faltan === 1 ? '' : 's'}` : '');
   document.getElementById('hemato-copiar').disabled = faltan === 0;
   const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const horas = f => f ? Math.floor((Date.now() - new Date(f)) / 3600000) : null;
@@ -135,7 +138,7 @@ async function loadRescateHemato() {
             onchange="marcarGestionHemato('${nro}', this)" /></td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="9" class="empty-state">No hay muestras por rescatar de hematología 🎉</td></tr>';
+    : `<tr><td colspan="9" class="empty-state">${hematoFiltro === 'ges' ? 'No hay muestras gestionadas' : 'No hay muestras por rescatar de hematología 🎉'}</td></tr>`;
 }
 
 function copiarCodigosHemato() {
@@ -197,4 +200,54 @@ async function marcarGestionHemato(nro, chk) {
   toast(marcar ? `${nro} gestionada` : `${nro} vuelve a quedar por rescatar`, marcar ? 'ok' : 'info');
   updateBadge();
   loadRescateHemato();
+}
+
+function chipHemato(el, val) {
+  document.querySelectorAll('#page-hematologia .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active'); hematoFiltro = val; loadRescateHemato();
+}
+
+// ---- Excel de hematología aparte ----
+// El Excel de ingresos con hematología pesa mucho; ahora se puede descargar el de
+// hematología solo y subirlo aquí. El archivo se lee en el navegador y NO se guarda:
+// solo se toman los códigos de muestra con hemoleucograma, se cruzan con nuestras
+// pruebas manuales de sangre que ya están en ingresos y siguen pendientes por recibir,
+// y esas se marcan para rescatar. Subirlo DESPUÉS de los ingresos del mismo corte.
+async function procesarHemogramas(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  toast('Leyendo hemogramas...', 'info');
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    const nrosHemo = nrosConHemograma(rows);
+    if (!nrosHemo.size) { toast('El archivo no trae hemoleucogramas (código 1001934)', 'err'); return; }
+
+    // Solo se consultan los tubos del archivo (consulta pequeña, por lotes de 100)
+    const nros = [...nrosHemo];
+    const nuestras = [];
+    for (let i = 0; i < nros.length; i += 100) {
+      const {data, error} = await sb.from('v_muestras')
+        .select('od_id,nro_muestra,estudio_nombre,estudio_codigo,estado')
+        .in('nro_muestra', nros.slice(i, i + 100));
+      if (error) { toast('Error cruzando con ingresos: ' + error.message, 'err'); return; }
+      nuestras.push(...(data || []));
+    }
+    const manuales = nuestras.filter(m => PRUEBAS_MANUALES_SANGRE.has(nombreCorto(m.estudio_nombre, m.estudio_codigo)));
+    const porRecibir = manuales.filter(m => m.estado === 'pendiente');
+    const yaMarcadas = porRecibir.filter(m => hematoOdIds.has(m.od_id)).length;
+    const nuevas = await marcarConHemograma(porRecibir.filter(m => !hematoOdIds.has(m.od_id)), nrosHemo);
+
+    const tubosNuestros = new Set(manuales.map(m => m.nro_muestra)).size;
+    let msg = `${nrosHemo.size} hemograma${nrosHemo.size === 1 ? '' : 's'} leído${nrosHemo.size === 1 ? '' : 's'} · ${tubosNuestros} con prueba manual nuestra`;
+    msg += ` · ${nuevas} nueva${nuevas === 1 ? '' : 's'} para rescatar`;
+    if (yaMarcadas) msg += ` · ${yaMarcadas} ya estaba${yaMarcadas === 1 ? '' : 'n'} en la lista`;
+    toast(msg, 'ok');
+    if (!tubosNuestros) toast('Ningún hemograma coincide con nuestros ingresos. ¿Ya se subió el Excel de ingresos de este corte?', 'info');
+    actualizarBadgeHemato();
+    await loadRescateHemato();
+  } catch (err) {
+    toast('Error leyendo el archivo: ' + err.message, 'err');
+  }
 }
