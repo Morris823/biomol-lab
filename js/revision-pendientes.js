@@ -74,22 +74,33 @@ async function cargarSeguimiento(area) {
   // validado manda (antes se quedaban en la lista para siempre).
   const pendientes = segRows[area].filter(r => r.estado !== 'validado');
   if (pendientes.length) {
+    // Se cruza por la PRUEBA exacta (od_id, o tubo + nombre de prueba), no solo por tubo:
+    // si un tubo tiene B27 validada y B57 pendiente, la B57 no debe salir como validada.
     const nros = [...new Set(pendientes.map(r => r.nro_muestra).filter(Boolean))];
-    const {data: ings} = await sb.from('ingresos').select('od_id,nro_muestra').in('nro_muestra', nros);
-    if (ings && ings.length) {
-      const odIds = ings.map(i => i.od_id);
-      const {data: vals} = await sb.from('validaciones').select('od_id').in('od_id', odIds);
-      if (vals && vals.length) {
-        const validadasOdIds = new Set(vals.map(v => v.od_id));
-        const nrosValidados = new Set(ings.filter(i => validadasOdIds.has(i.od_id)).map(i => i.nro_muestra));
-        for (const r of pendientes) {
-          if (nrosValidados.has(r.nro_muestra)) {
-            await sb.from('seguimiento_manuales').update({ estado: 'validado' }).eq('id', r.id);
-            r.estado = 'validado';
-          }
-        }
-      }
+    const ings = [];
+    for (let i = 0; i < nros.length; i += 100) {
+      const {data} = await sb.from('ingresos').select('od_id,nro_muestra,estudio_nombre').in('nro_muestra', nros.slice(i, i + 100));
+      ings.push(...(data || []));
     }
+    const validadas = new Set();
+    const odIds = ings.map(i => i.od_id);
+    for (let i = 0; i < odIds.length; i += 100) {
+      const {data} = await sb.from('validaciones').select('od_id').in('od_id', odIds.slice(i, i + 100));
+      (data || []).forEach(v => validadas.add(v.od_id));
+    }
+    const norm = t => String(t || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    const estaValidada = r => {
+      if (r.od_id && ings.some(i => i.od_id === r.od_id)) return validadas.has(r.od_id);
+      const delTubo = ings.filter(i => i.nro_muestra === r.nro_muestra);
+      const misma = r.estudio_nombre ? delTubo.filter(i => norm(i.estudio_nombre) === norm(r.estudio_nombre)) : delTubo;
+      return misma.length > 0 && misma.every(i => validadas.has(i.od_id));
+    };
+    const aValidar = pendientes.filter(estaValidada);
+    for (let i = 0; i < aValidar.length; i += 100) {
+      const ids = aValidar.slice(i, i + 100).map(r => r.id);
+      await sb.from('seguimiento_manuales').update({ estado: 'validado' }).in('id', ids);
+    }
+    aValidar.forEach(r => { r.estado = 'validado'; });
   }
 
   const nrosSeg = segRows[area].map(r => r.nro_muestra);
