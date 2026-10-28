@@ -430,3 +430,79 @@ create table if not exists public.tubos_adicionales (
 alter table public.tubos_adicionales enable row level security;
 drop policy if exists acceso_app on public.tubos_adicionales;
 create policy acceso_app on public.tubos_adicionales for all to public using (true);
+
+
+-- ============================================================
+-- GENOTIPO VIH (NGS)
+-- ============================================================
+create table if not exists public.genotipo_vih (
+  od_id text primary key,               -- ingreso de Genotipo VIH (1001882)
+  nro_muestra text,
+  estado text,                          -- null = se calcula | nsr | tot | par | sin | rem
+  cv_valor text,                        -- tal como se escribe: '3450', '<20'
+  cv_num numeric,                       -- para comparar con 200 ('<20' = 0)
+  cv_fecha date,
+  genes jsonb not null default '{"PR":true,"RT":true,"INT":true}'::jsonb,
+  subtipo text,
+  mutaciones jsonb not null default '{}'::jsonb,     -- {"PR":"L10I","RT":"M184V","INT":""}
+  resistencias jsonb not null default '{}'::jsonb,   -- {"3TC":"H","DTG":"S"} (niveles Stanford)
+  link_resultado text,
+  clinicos jsonb not null default '{}'::jsonb,       -- opcionales: dx, estadio, grupo, tel, cv previa, tto, cd4
+  nueva_muestra_fecha date,
+  nueva_muestra_por text,
+  vinculo_od text,                      -- intento siguiente (la nueva muestra que llegó)
+  nueva_de_od text,                     -- intento anterior
+  aviso_nueva boolean not null default false,
+  notas text,
+  actualizado_por text,
+  updated_at timestamptz default now()
+);
+create table if not exists public.genotipo_corridas (
+  id uuid primary key default gen_random_uuid(),
+  letra text not null,
+  anio integer not null,
+  estado text not null default 'armando',   -- armando | secuenciacion | cerrada
+  fecha_ext1 date, fecha_ext2 date, fecha_seq date,
+  creada_por text,
+  created_at timestamptz default now(),
+  unique (letra, anio)
+);
+create table if not exists public.genotipo_posiciones (
+  id uuid primary key default gen_random_uuid(),
+  corrida_id uuid not null references public.genotipo_corridas(id) on delete cascade,
+  posicion integer not null,
+  od_id text,                           -- null en verificaciones o muestras viejas sin ingreso en el gestor
+  nro_muestra text,
+  paciente text,
+  cv text,
+  verificacion text,                    -- nombre del control/verificación si la posición no es paciente
+  extraccion integer not null default 1,
+  amplificacion text not null default 'pend',   -- pend | si | no
+  repetida boolean not null default false,
+  nota text,
+  registrado_por text,
+  created_at timestamptz default now()
+);
+create index if not exists idx_genotipo_pos_corrida on public.genotipo_posiciones (corrida_id);
+create index if not exists idx_genotipo_pos_od on public.genotipo_posiciones (od_id);
+create table if not exists public.genotipo_correos (
+  id uuid primary key default gen_random_uuid(),
+  od_id text not null,
+  tipo text not null,                   -- nsr | inop | nm
+  enviado_por text,
+  fecha timestamptz default now()
+);
+create index if not exists idx_genotipo_correos_od on public.genotipo_correos (od_id);
+create index if not exists idx_ingresos_estudio_codigo on public.ingresos (estudio_codigo);
+alter table public.genotipo_vih enable row level security;
+drop policy if exists acceso_app on public.genotipo_vih;
+create policy acceso_app on public.genotipo_vih for all to public using (true);
+alter table public.genotipo_corridas enable row level security;
+drop policy if exists acceso_app on public.genotipo_corridas;
+create policy acceso_app on public.genotipo_corridas for all to public using (true);
+alter table public.genotipo_posiciones enable row level security;
+drop policy if exists acceso_app on public.genotipo_posiciones;
+create policy acceso_app on public.genotipo_posiciones for all to public using (true);
+alter table public.genotipo_correos enable row level security;
+drop policy if exists acceso_app on public.genotipo_correos;
+create policy acceso_app on public.genotipo_correos for all to public using (true);

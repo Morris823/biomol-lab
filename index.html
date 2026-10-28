@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/genotipo.css" />
 </head>
 <body>
 
@@ -156,6 +157,10 @@
       <div class="nav-item" onclick="nav('revision-tb',this)"><i class="ti ti-lungs"></i> Revisión pendientes — TB</div>
     </div>
     <div class="nav-section">
+      <div class="nav-label">Equipos — Genotipo VIH (NGS)</div>
+      <div class="nav-item" onclick="nav('genotipo',this)"><i class="ti ti-dna"></i> Genotipo VIH <span class="badge" id="badge-genotipo" style="display:none;background:var(--red-bg);color:var(--red)">0</span></div>
+    </div>
+    <div class="nav-section">
       <div class="nav-label">Validación</div>
       <div class="nav-item" onclick="nav('validacion',this)"><i class="ti ti-circle-check"></i> Importar validados</div>
       <div class="nav-item" onclick="nav('muestras',this)"><i class="ti ti-flask"></i> Todas las muestras</div>
@@ -179,6 +184,47 @@
 
     <div class="rel">
       <div class="content">
+
+        <!-- GENOTIPO VIH (NGS) -->
+        <div class="page" id="page-genotipo">
+          <div class="gv-tabs">
+            <div class="gv-tab active" data-t="muestras" onclick="gvIrTab('muestras')"><i class="ti ti-list-details"></i> Muestras <span class="n" id="gv-tn-muestras"></span></div>
+            <div class="gv-tab" data-t="corridas" onclick="gvIrTab('corridas')"><i class="ti ti-stack-2"></i> Corridas NGS <span class="n" id="gv-tn-corridas"></span></div>
+          </div>
+          <div id="gv-v-muestras">
+            <div id="gv-avisos"></div>
+            <div class="gv-kpis" id="gv-kpis"></div>
+            <div class="panel">
+              <div class="panel-header">
+                <span class="panel-title" id="gv-lista-titulo">Muestras activas</span>
+                <input id="gv-buscar" placeholder="Buscar código, paciente, cédula, ID…" oninput="gvRenderLista()" style="width:240px;font-size:12px;padding:5px 9px">
+              </div>
+              <div style="overflow:auto"><table>
+                <thead><tr><th>Código LabCore</th><th>Paciente</th><th>Sede</th><th>Recepción</th><th>Oportunidad (30 d háb.)</th><th>CV del tubo</th><th>Estado</th><th>ID</th><th></th></tr></thead>
+                <tbody id="gv-lista"><tr><td colspan="9" class="empty-state">Cargando…</td></tr></tbody>
+              </table></div>
+            </div>
+            <div class="gv-nota"><b>Cómo funciona:</b> cada ingreso de Genotipo VIH aparece aquí solo. Escribe la <b>carga viral del tubo</b> y Enter: si es &lt;200 copias/mL pasa a <b>No se realiza</b> (sin ID) y queda listo el correo para el médico; si es ≥200 queda <b>Apta</b> en la cola de la próxima corrida. La oportunidad cuenta 30 días hábiles desde la recepción.</div>
+          </div>
+          <div id="gv-v-corridas" style="display:none">
+            <div class="gv-corr">
+              <div class="panel" style="margin:0">
+                <div class="panel-header"><span class="panel-title">Corridas</span><button class="btn btn-primary" style="padding:4px 10px" onclick="gvNuevaCorrida()"><i class="ti ti-plus"></i> Nueva</button></div>
+                <div id="gv-clist"></div>
+              </div>
+              <div id="gv-cdet"></div>
+            </div>
+          </div>
+          <div class="gv-ov" id="gv-ov" onclick="gvCerrarDrawer()"></div>
+          <div class="gv-drawer" id="gv-drawer">
+            <div class="gv-dh"><div style="flex:1" id="gv-dh"></div><button class="btn" style="padding:3px 8px" onclick="gvCerrarDrawer()"><i class="ti ti-x"></i></button></div>
+            <div class="gv-db" id="gv-db"></div>
+          </div>
+          <div class="gv-mbg" id="gv-mbg" onclick="if(event.target===this)gvCerrarModal()">
+            <div class="gv-modal"><div class="gv-mh"><i class="ti ti-mail" style="font-size:16px"></i><b id="gv-mt"></b><button class="btn" style="padding:3px 8px" onclick="gvCerrarModal()"><i class="ti ti-x"></i></button></div>
+              <div class="gv-mb" id="gv-mb"></div><div class="gv-mf" id="gv-mf"></div></div>
+          </div>
+        </div>
 
         <!-- DASHBOARD -->
         <div class="page active" id="page-dashboard">
@@ -1227,5 +1273,6 @@
 <script src="js/descarte.js"></script>
 <script src="js/estadistica.js"></script>
 <script src="js/sedes.js"></script>
+<script src="js/genotipo.js"></script>
 </body>
 </html>

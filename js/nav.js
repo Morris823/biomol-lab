@@ -9,7 +9,7 @@ const PAGE_TITLES = {
   tuberculosis:'Tuberculosis — Corridas', correo:'Generar correo',
   'revision-manuales':'Revisión de pendientes — Manuales', 'revision-tb':'Revisión de pendientes — TB',
   checklist:'Cierre de turno — Bacteriólogos', descarte:'Descarte de muestras',
-  remisiones:'Remisiones'
+  remisiones:'Remisiones', genotipo:'Genotipo VIH (NGS)'
 };
 
 function nav(name, el) {
@@ -38,5 +38,6 @@ function nav(name, el) {
   if (name === 'estadistica') initEstadistica();
   if (name === 'cierre') initCierre();
   if (name === 'remisiones') initRemisiones();
+  if (name === 'genotipo') initGenotipo();
 }
 
