@@ -18,12 +18,12 @@
 const GV_COD = '1001882';
 const GV_OPORTUNIDAD = 30;            // días hábiles desde la recepción
 const GV_UMBRAL_CV = 200;             // copias/mL
-const GV_FINALES = ['nsr', 'tot', 'par', 'sin', 'rem', 'val', 'anu'];
+const GV_FINALES = ['nsr', 'tot', 'par', 'sin', 'rem', 'val', 'anu', 'ges'];
 const GV_ESTADOS = {
   pend: ['Pendiente de recibir', 'gv-e-pend'], cv: ['Esperando CV', 'gv-e-cv'], nsr: ['No se realiza', 'gv-e-nsr'],
   apta: ['Apta · en cola', 'gv-e-apta'], corrida: ['En corrida', 'gv-e-corrida'], tot: ['Resultado total', 'gv-e-tot'],
   par: ['Resultado parcial', 'gv-e-par'], sin: ['Sin resultado (no amplificó)', 'gv-e-sin'], rem: ['Remitida (externa)', 'gv-e-rem'],
-  val: ['Validada', 'gv-e-val'], anu: ['Anulada', 'gv-e-pend']
+  val: ['Validada', 'gv-e-val'], anu: ['Anulada', 'gv-e-pend'], ges: ['Gestionada · fuera de la lista', 'gv-e-pend']
 };
 const GV_DROGAS = [
   ['Inhibidores nucleósidos de la TR (NRTI)', ['ABC', 'AZT', 'FTC', '3TC', 'TDF', 'D4T', 'DDI']],
@@ -71,7 +71,7 @@ function gvPosDe(od) {
 function gvEstado(m) {
   if (m.estado === 'anulado') return 'anu';
   const g = gvG(m.od_id), p = gvPosDe(m.od_id);
-  if (['nsr', 'tot', 'par', 'sin', 'rem'].includes(g.estado)) return g.estado;
+  if (['nsr', 'tot', 'par', 'sin', 'rem', 'ges'].includes(g.estado)) return g.estado;
   if (p && p.amplificacion === 'no') return 'sin';
   if (m.estado === 'validado') return 'val';
   if (p) return 'corrida';
@@ -207,7 +207,7 @@ function gvActualizarBadge() {
 // "Activa" = necesita algo del laboratorio
 function gvActiva(m) {
   const e = gvEstado(m), g = gvG(m.od_id);
-  if (['tot', 'par', 'val', 'rem', 'anu'].includes(e)) return false;
+  if (['tot', 'par', 'val', 'rem', 'anu', 'ges'].includes(e)) return false;
   if (e === 'nsr' && gvCorreosDe(m.od_id, 'nsr').length) return false;
   if (e === 'sin' && g.vinculo_od) return false;
   if (e === 'sin' && g.nueva_muestra_fecha && gvCorreosDe(m.od_id, 'nm').length) return false;
@@ -221,9 +221,11 @@ function gvFiltros() {
     ['apta', 'Aptas en cola', m => gvEstado(m) === 'apta'],
     ['corrida', 'En corrida', m => gvEstado(m) === 'corrida'],
     ['vence', 'Vencen ≤ 1 día', m => { const e = gvEstado(m), o = gvOportunidad(m); return o && ['cv', 'apta', 'corrida'].includes(e) && o.quedan <= 1 && !gvCorreosDe(m.od_id, 'inop').length; }],
-    ['nsr', 'No se realiza', m => gvEstado(m) === 'nsr'],
+    ['nsr', 'No se realiza · sin correo', m => gvEstado(m) === 'nsr' && !gvCorreosDe(m.od_id, 'nsr').length],
     ['fin', 'Con resultado', m => ['tot', 'par', 'sin', 'val', 'rem'].includes(gvEstado(m))],
     ['sincv', 'Sin ingreso CV', m => gvActiva(m) && !gvIngresoCV(m)],
+    ['nsrenv', 'No se realiza · correo enviado', m => gvEstado(m) === 'nsr' && gvCorreosDe(m.od_id, 'nsr').length > 0],
+    ['ges', 'Gestionadas (fuera de la lista)', m => gvEstado(m) === 'ges'],
   ];
 }
 
@@ -247,9 +249,9 @@ function gvRenderKpis() {
     ['apta', F[3][2], enF ? `corrida ${enF.letra} abierta` : 'no hay corrida abierta'],
     ['corrida', F[4][2], 'armando o en secuenciación'],
     ['vence', F[5][2], `${GV_OPORTUNIDAD} días hábiles desde recepción`],
-    ['nsr', F[6][2], `CV < ${GV_UMBRAL_CV} copias/mL`],
+    ['nsr', F[6][2], `<a href="#" onclick="event.preventDefault();event.stopPropagation();gvSetFiltro('nsrenv')">${gvMuestras.filter(F.find(x => x[0] === 'nsrenv')[2]).length} con correo enviado →</a>`],
   ];
-  document.getElementById('gv-kpis').innerHTML = k.map(([id, f, s]) => { const n = gvMuestras.filter(f).length; const lbl = F.find(x => x[0] === id)[1];
+  document.getElementById('gv-kpis').innerHTML = k.map(([id, f, s]) => { const n = gvMuestras.filter(f).length; const lbl = id === 'nsr' ? 'No se realiza · sin correo' : F.find(x => x[0] === id)[1];
     return `<div class="mc ${gvFiltro === id ? 'sel' : ''}" onclick="gvSetFiltro('${id}')"><div class="mc-label">${lbl}</div><div class="mc-value" style="${id === 'vence' && n ? 'color:var(--red)' : ''}">${n}</div><div class="mc-sub">${s}</div></div>`; }).join('');
 }
 function gvSetFiltro(f) { gvFiltro = gvFiltro === f ? 'activas' : f; gvRender(); }
@@ -280,7 +282,11 @@ async function gvPonerCV(od, valor) {
 }
 function gvBotones(m) {
   const b = [], e = gvEstado(m), g = gvG(m.od_id), o = gvOportunidad(m);
-  if (e === 'nsr') b.push(`<button class="btn ${gvCorreosDe(m.od_id, 'nsr').length ? '' : 'btn-yellow'}" onclick="event.stopPropagation();gvCorreo('${m.od_id}','nsr')"><i class="ti ti-mail"></i> No se realiza</button>`);
+  if (e === 'nsr') { const env = gvCorreosDe(m.od_id, 'nsr');
+    b.push(env.length ? `<span class="pill gv-e-tot" title="Enviado por ${gvEsc(env[env.length - 1].enviado_por || '')}"><i class="ti ti-mail-check"></i> Correo enviado ${fmt(env[env.length - 1].fecha)}</span>`
+      : `<button class="btn btn-yellow" onclick="event.stopPropagation();gvCorreo('${m.od_id}','nsr')"><i class="ti ti-mail"></i> No se realiza</button>`); }
+  if (e === 'pend') b.push(`<button class="btn ${m.gestion ? 'btn-yellow' : ''}" title="Sacarla de la lista: se sabe que no va a llegar" onclick="event.stopPropagation();gvSacarGestionada('${m.od_id}')"><i class="ti ti-archive"></i> Sacar</button>`);
+  if (e === 'ges') b.push(`<button class="btn" title="Volver a ponerla en la lista" onclick="event.stopPropagation();gvGuardar('${m.od_id}',{estado:null}).then(gvRender)"><i class="ti ti-arrow-back-up"></i> Devolver</button>`);
   if (o && !o.parado && o.quedan <= 1 && ['apta', 'corrida', 'cv'].includes(e)) b.push(`<button class="btn ${gvCorreosDe(m.od_id, 'inop').length ? '' : 'btn-red'}" onclick="event.stopPropagation();gvCorreo('${m.od_id}','inop')"><i class="ti ti-mail"></i> Inoportunidad</button>`);
   if (e === 'sin' && !g.nueva_muestra_fecha) b.push(`<button class="btn btn-yellow" onclick="event.stopPropagation();gvCorreo('${m.od_id}','nm')"><i class="ti ti-mail"></i> Pedir nueva muestra</button>`);
   if (e === 'sin' && g.nueva_muestra_fecha && !g.vinculo_od) b.push(`<span class="pill gv-e-nm">Nueva muestra pedida ${fmt(g.nueva_muestra_fecha)}</span>`);
@@ -296,6 +302,7 @@ function gvRenderLista() {
   const orden = { nsr: 0, cv: 1, apta: 2, pend: 3, corrida: 4, sin: 5, tot: 6, par: 6, val: 7, rem: 7, anu: 8 };
   arr.sort((a, b) => (orden[gvEstado(a)] - orden[gvEstado(b)]) || ((gvOportunidad(a)?.quedan ?? 99) - (gvOportunidad(b)?.quedan ?? 99)) || (new Date(b.fecha_ingreso) - new Date(a.fecha_ingreso)));
   document.getElementById('gv-chip-sincv')?.classList.toggle('active', gvFiltro === 'sincv');
+  document.getElementById('gv-chip-ges')?.classList.toggle('active', gvFiltro === 'ges');
   document.getElementById('gv-lista-titulo').textContent = (gvFiltro === 'activas' ? 'Muestras activas' : f[1]) + ` · ${arr.length}`;
   document.getElementById('gv-lista').innerHTML = arr.length ? arr.map(m => { const e = gvEstado(m), id = idDe(m), g = gvG(m.od_id);
     return `<tr class="gv-clic" onclick="gvAbrir('${m.od_id}')">
@@ -306,8 +313,9 @@ function gvRenderLista() {
       <td class="mono">${m.fecha_recepcion ? fmt(m.fecha_recepcion) : '<span class="gv-sub">no ha llegado</span>'}</td>
       <td>${gvCeldaOp(m)}</td><td>${gvCeldaCV(m)}</td>
       <td><span class="pill ${GV_ESTADOS[e][1]}">${GV_ESTADOS[e][0]}</span></td>
+      <td style="font-size:11px;color:var(--text2);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${gvEsc(m.gestion ? m.gestion + (m.gestionado_por ? ' — ' + m.gestionado_por : '') : '')}">${m.gestion ? `${gestionadasLocal.has(m.od_id) ? '<i class="ti ti-circle-check" style="color:var(--teal)" title="Gestionada en Pendientes por recibir"></i> ' : ''}${gvEsc(m.gestion)}` : '<span class="gv-sub">—</span>'}</td>
       <td>${id ? `<span class="gv-id">${id}</span>` : '<span class="gv-sub">—</span>'}</td>
-      <td>${gvBotones(m)}</td></tr>`; }).join('') : '<tr><td colspan="10" class="empty-state">Nada por aquí 🎉</td></tr>';
+      <td>${gvBotones(m)}</td></tr>`; }).join('') : '<tr><td colspan="11" class="empty-state">Nada por aquí 🎉</td></tr>';
 }
 
 // ---------------- Detalle de la muestra ----------------
@@ -338,6 +346,7 @@ function gvRenderDrawer() {
   if (g.nueva_muestra_fecha) h.push({ f: g.nueva_muestra_fecha, t: `Nueva muestra solicitada${g.nueva_muestra_por ? ' (' + gvEsc(g.nueva_muestra_por) + ')' : ''}`, c: '' });
   if (g.vinculo_od) { const n = gvM(g.vinculo_od); if (n) h.push({ f: n.fecha_ingreso, t: `Llegó la nueva muestra ${n.nro_muestra}`, c: 'now', od: n.od_id }); }
   gvCorreosDe(m.od_id).forEach(c => h.push({ f: c.fecha, t: `Correo: ${{ nsr: 'no se realiza', inop: 'inoportunidad', nm: 'solicitud de nueva muestra' }[c.tipo] || c.tipo}${c.enviado_por ? ' (' + gvEsc(c.enviado_por) + ')' : ''}`, c: '' }));
+  if (g.estado === 'ges') h.push({ f: g.updated_at, t: `Sacada de la lista como gestionada${g.actualizado_por ? ' (' + gvEsc(g.actualizado_por) + ')' : ''}`, c: '' });
   if (m.fecha_validacion) h.push({ f: m.fecha_validacion, t: `Validada en LabCore${m.validado_por ? ' (' + gvEsc(m.validado_por) + ')' : ''}`, c: 'ok' });
   h.sort((a, b) => new Date(a.f || 0) - new Date(b.f || 0));
   const od = m.od_id;
@@ -345,7 +354,8 @@ function gvRenderDrawer() {
   document.getElementById('gv-db').innerHTML = `
     <div class="gv-sec"><h4><i class="ti ti-timeline"></i> Historia de la muestra</h4><ul class="gv-tl">${h.map(x => `<li class="${x.c}"><span class="f">${fmt(x.f)}</span> · ${x.t}${x.od ? ` <a href="#" onclick="event.preventDefault();gvAbrir('${x.od}')">ver</a>` : ''}</li>`).join('')}</ul></div>
     <div class="gv-sec"><h4><i class="ti ti-droplet"></i> Carga viral del tubo</h4>
-      <dl class="gv-kv"><dt>Ingreso de CV VIH</dt><dd>${gvChipCV(m)}</dd><dt>Valor</dt><dd>${gvCeldaCV(m)}${gvCV(g) != null && !p ? ` <a href="#" style="font-size:11px;margin-left:6px" onclick="event.preventDefault();gvCorregirCV('${od}')">corregir</a>` : ''}</dd>
+      <dl class="gv-kv"><dt>Nota de las auxiliares</dt><dd style="font-size:11.5px">${m.gestion ? gvEsc(m.gestion) + (m.gestionado_por ? ` <span class="gv-sub">— ${gvEsc(m.gestionado_por)}</span>` : '') : '<span class="gv-sub">sin nota en Pendientes por recibir</span>'}</dd>
+      <dt>Ingreso de CV VIH</dt><dd>${gvChipCV(m)}</dd><dt>Valor</dt><dd>${gvCeldaCV(m)}${gvCV(g) != null && !p ? ` <a href="#" style="font-size:11px;margin-left:6px" onclick="event.preventDefault();gvCorregirCV('${od}')">corregir</a>` : ''}</dd>
       <dt>Regla</dt><dd style="font-size:11.5px;color:var(--text2)">&lt; ${GV_UMBRAL_CV} copias/mL → no se realiza · ≥ ${GV_UMBRAL_CV} → apta</dd></dl></div>
     <div class="gv-sec"><details class="gv-opc"><summary>Datos clínicos (opcionales)</summary><div class="gv-grid2">
       ${clin('dx', 'Año de diagnóstico', 'ej. 2019')}
@@ -357,7 +367,7 @@ function gvRenderDrawer() {
     <div class="gv-sec"><h4><i class="ti ti-report-medical"></i> Resultado</h4>
       <div class="gv-grid2" style="margin-top:0">
         <label>Estado final<select onchange="gvCambiarFinal('${od}',this.value)"><option value="">— (se calcula)</option>
-          ${[['tot', 'TOTAL'], ['par', 'RESULTADO PARCIAL'], ['sin', 'SIN RESULTADO (no amplificó)'], ['nsr', 'NO SE REALIZA'], ['rem', 'REMITIDA (externa)']].map(([k, l]) => `<option value="${k}" ${g.estado === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+          ${[['tot', 'TOTAL'], ['par', 'RESULTADO PARCIAL'], ['sin', 'SIN RESULTADO (no amplificó)'], ['nsr', 'NO SE REALIZA'], ['rem', 'REMITIDA (externa)'], ['ges', 'GESTIONADA (no va a llegar)']].map(([k, l]) => `<option value="${k}" ${g.estado === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label>Subtipo<input value="${gvEsc(g.subtipo || '')}" placeholder="ej. B" onchange="gvGuardar('${od}',{subtipo:this.value.trim()})"></label>
       </div>
       <div class="gv-fld" style="margin-top:10px">Genes secuenciados <span class="gv-sub">(clic en el que no salió → resultado parcial)</span>
@@ -371,6 +381,12 @@ function gvRenderDrawer() {
     </div>
     <div class="gv-sec"><h4><i class="ti ti-mail"></i> Correos</h4><div style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="btn" onclick="gvCorreo('${od}','nsr')">No se realiza</button><button class="btn" onclick="gvCorreo('${od}','inop')">Inoportunidad</button><button class="btn" onclick="gvCorreo('${od}','nm')">Nueva muestra</button></div></div>`;
+}
+async function gvSacarGestionada(od) {
+  const m = gvM(od);
+  const nota = m.gestion ? `\n\nNota de las auxiliares: "${m.gestion}"` : '\n\n(No tiene nota de gestión de las auxiliares.)';
+  if (!confirm(`¿Sacar de la lista a ${gvNombre(m)}? Queda como gestionada (no va a llegar). Se puede devolver desde "Gestionadas".${nota}`)) return;
+  if (await gvGuardar(od, { estado: 'ges' })) { toast('Sacada de la lista como gestionada', 'ok'); gvRender(); }
 }
 async function gvCorregirCV(od) { if (!confirm('¿Borrar la carga viral para escribirla de nuevo?')) return; await gvGuardar(od, { cv_valor: null, cv_num: null, cv_fecha: null, estado: null }); gvRender(); }
 async function gvGuardarClin(od, k, v) { const cl = { ...(gvG(od).clinicos || {}), [k]: v }; await gvGuardar(od, { clinicos: cl }); }

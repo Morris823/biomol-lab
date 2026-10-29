@@ -198,11 +198,12 @@
               <div class="panel-header">
                 <span class="panel-title" id="gv-lista-titulo">Muestras activas</span>
                 <span class="chip" id="gv-chip-sincv" onclick="gvSetFiltro('sincv')" title="Activas sin ingreso de carga viral de VIH">✗ Sin ingreso CV</span>
+                <span class="chip" id="gv-chip-ges" onclick="gvSetFiltro('ges')" title="Las que se sacaron de la lista porque no van a llegar">Gestionadas</span>
                 <input id="gv-buscar" placeholder="Buscar código, paciente, cédula, ID…" oninput="gvRenderLista()" style="width:240px;font-size:12px;padding:5px 9px">
               </div>
               <div style="overflow:auto"><table>
-                <thead><tr><th>Código LabCore</th><th>Paciente</th><th>Ingreso CV VIH</th><th>Sede</th><th>Recepción</th><th>Oportunidad (30 d háb.)</th><th>CV del tubo</th><th>Estado</th><th>ID</th><th></th></tr></thead>
-                <tbody id="gv-lista"><tr><td colspan="10" class="empty-state">Cargando…</td></tr></tbody>
+                <thead><tr><th>Código LabCore</th><th>Paciente</th><th>Ingreso CV VIH</th><th>Sede</th><th>Recepción</th><th>Oportunidad (30 d háb.)</th><th>CV del tubo</th><th>Estado</th><th>Nota auxiliares</th><th>ID</th><th></th></tr></thead>
+                <tbody id="gv-lista"><tr><td colspan="11" class="empty-state">Cargando…</td></tr></tbody>
               </table></div>
             </div>
             <div class="gv-nota"><b>Cómo funciona:</b> cada ingreso de Genotipo VIH aparece aquí solo. Escribe la <b>carga viral del tubo</b> y Enter: si es &lt;200 copias/mL pasa a <b>No se realiza</b> (sin ID) y queda listo el correo para el médico; si es ≥200 queda <b>Apta</b> en la cola de la próxima corrida. La oportunidad cuenta 30 días hábiles desde la recepción.</div>
