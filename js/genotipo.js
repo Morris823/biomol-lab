@@ -41,6 +41,9 @@ let gvPos = [];               // posiciones de las corridas cargadas
 let gvCorreos = [];
 let gvFiltro = 'activas', gvTab = 'muestras', gvCorrSel = null, gvVista = 'pos', gvAbierto = null, gvCorreoActual = null;
 let gvCargado = false;
+let gvCVTubo = new Set();          // nro_muestra de genotipo que también tienen ingreso de CV VIH (1000165)
+let gvCVPaciente = new Map();      // cédula -> [fechas de ingreso de CV VIH] (para "otro tubo")
+const GV_COD_CV = '1000165';
 
 // ---------------- Utilidades ----------------
 const gvEsc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
@@ -104,6 +107,7 @@ async function gvCargar() {
     if (!data || data.length < 1000) break;
   }
   gvMuestras = filas;
+  await gvCargarIngresosCV(desde);
   const [rg, rc, rco] = await Promise.all([
     sb.from('genotipo_vih').select('*'),
     sb.from('genotipo_corridas').select('*').gte('anio', new Date().getFullYear() - 1).order('created_at', { ascending: true }),
@@ -121,6 +125,37 @@ async function gvCargar() {
   }
   gvCargado = true;
   await gvVincularNuevasMuestras();
+}
+
+// ¿La muestra tiene también ingreso de carga viral de VIH? Solo se consultan los tubos y
+// cédulas de genotipo (consultas pequeñas, por lotes de 100).
+async function gvCargarIngresosCV(desde) {
+  gvCVTubo = new Set(); gvCVPaciente = new Map();
+  const nros = [...new Set(gvMuestras.map(m => m.nro_muestra).filter(Boolean))];
+  const ccs = [...new Set(gvMuestras.map(m => m.identificacion).filter(Boolean))];
+  for (let i = 0; i < nros.length; i += 100) {
+    const {data} = await sb.from('ingresos').select('nro_muestra').eq('estudio_codigo', GV_COD_CV).in('nro_muestra', nros.slice(i, i + 100));
+    (data || []).forEach(r => gvCVTubo.add(r.nro_muestra));
+  }
+  for (let i = 0; i < ccs.length; i += 100) {
+    const {data} = await sb.from('ingresos').select('identificacion,fecha_ingreso').eq('estudio_codigo', GV_COD_CV).gte('fecha_ingreso', desde).in('identificacion', ccs.slice(i, i + 100));
+    (data || []).forEach(r => { if (!gvCVPaciente.has(r.identificacion)) gvCVPaciente.set(r.identificacion, []); gvCVPaciente.get(r.identificacion).push(r.fecha_ingreso); });
+  }
+}
+// 'tubo' = el mismo tubo tiene ingreso de CV · 'paciente' = el paciente tiene CV en otro tubo
+// (±15 días del ingreso del genotipo) · null = no tiene ingreso de CV
+function gvIngresoCV(m) {
+  if (gvCVTubo.has(m.nro_muestra)) return { tipo: 'tubo' };
+  const fs = gvCVPaciente.get(m.identificacion) || [];
+  const t0 = new Date(m.fecha_ingreso).getTime();
+  const cerca = fs.filter(f => Math.abs(new Date(f).getTime() - t0) <= 15 * 864e5).sort((a, b) => Math.abs(new Date(a) - t0) - Math.abs(new Date(b) - t0))[0];
+  return cerca ? { tipo: 'paciente', fecha: cerca } : null;
+}
+function gvChipCV(m) {
+  const c = gvIngresoCV(m);
+  if (!c) return '<span class="pill gv-e-nsr" title="No hay ingreso de carga viral de VIH para este tubo ni para el paciente en esos días">✗ Sin ingreso CV</span>';
+  if (c.tipo === 'tubo') return '<span class="pill gv-e-tot" title="El mismo tubo tiene ingreso de carga viral de VIH">✓ Mismo tubo</span>';
+  return `<span class="pill gv-e-apta" title="El paciente tiene ingreso de carga viral de VIH en otro tubo">✓ Otro tubo · ${fmt(c.fecha)}</span>`;
 }
 
 // Cuando llega un ingreso nuevo de genotipo de un paciente al que se le pidió nueva
@@ -188,6 +223,7 @@ function gvFiltros() {
     ['vence', 'Vencen ≤ 1 día', m => { const e = gvEstado(m), o = gvOportunidad(m); return o && ['cv', 'apta', 'corrida'].includes(e) && o.quedan <= 1 && !gvCorreosDe(m.od_id, 'inop').length; }],
     ['nsr', 'No se realiza', m => gvEstado(m) === 'nsr'],
     ['fin', 'Con resultado', m => ['tot', 'par', 'sin', 'val', 'rem'].includes(gvEstado(m))],
+    ['sincv', 'Sin ingreso CV', m => gvActiva(m) && !gvIngresoCV(m)],
   ];
 }
 
@@ -259,17 +295,19 @@ function gvRenderLista() {
   let arr = gvMuestras.filter(f[2]).filter(m => !q || [m.nro_muestra, m.nombres, m.apellidos, m.identificacion, idDe(m)].join(' ').toLowerCase().includes(q));
   const orden = { nsr: 0, cv: 1, apta: 2, pend: 3, corrida: 4, sin: 5, tot: 6, par: 6, val: 7, rem: 7, anu: 8 };
   arr.sort((a, b) => (orden[gvEstado(a)] - orden[gvEstado(b)]) || ((gvOportunidad(a)?.quedan ?? 99) - (gvOportunidad(b)?.quedan ?? 99)) || (new Date(b.fecha_ingreso) - new Date(a.fecha_ingreso)));
+  document.getElementById('gv-chip-sincv')?.classList.toggle('active', gvFiltro === 'sincv');
   document.getElementById('gv-lista-titulo').textContent = (gvFiltro === 'activas' ? 'Muestras activas' : f[1]) + ` · ${arr.length}`;
   document.getElementById('gv-lista').innerHTML = arr.length ? arr.map(m => { const e = gvEstado(m), id = idDe(m), g = gvG(m.od_id);
     return `<tr class="gv-clic" onclick="gvAbrir('${m.od_id}')">
       <td class="mono">${m.nro_muestra}${g.nueva_de_od ? '<div class="gv-sub"><i class="ti ti-link"></i> nueva muestra</div>' : ''}</td>
       <td>${gvEsc(gvNombre(m))}<div class="gv-sub">CC ${gvEsc(m.identificacion || '—')}</div></td>
+      <td>${gvChipCV(m)}</td>
       <td style="font-size:11px;color:var(--text2)">${gvEsc((m.sede || '—').replace('Ay Dx ', ''))}</td>
       <td class="mono">${m.fecha_recepcion ? fmt(m.fecha_recepcion) : '<span class="gv-sub">no ha llegado</span>'}</td>
       <td>${gvCeldaOp(m)}</td><td>${gvCeldaCV(m)}</td>
       <td><span class="pill ${GV_ESTADOS[e][1]}">${GV_ESTADOS[e][0]}</span></td>
       <td>${id ? `<span class="gv-id">${id}</span>` : '<span class="gv-sub">—</span>'}</td>
-      <td>${gvBotones(m)}</td></tr>`; }).join('') : '<tr><td colspan="9" class="empty-state">Nada por aquí 🎉</td></tr>';
+      <td>${gvBotones(m)}</td></tr>`; }).join('') : '<tr><td colspan="10" class="empty-state">Nada por aquí 🎉</td></tr>';
 }
 
 // ---------------- Detalle de la muestra ----------------
@@ -307,7 +345,7 @@ function gvRenderDrawer() {
   document.getElementById('gv-db').innerHTML = `
     <div class="gv-sec"><h4><i class="ti ti-timeline"></i> Historia de la muestra</h4><ul class="gv-tl">${h.map(x => `<li class="${x.c}"><span class="f">${fmt(x.f)}</span> · ${x.t}${x.od ? ` <a href="#" onclick="event.preventDefault();gvAbrir('${x.od}')">ver</a>` : ''}</li>`).join('')}</ul></div>
     <div class="gv-sec"><h4><i class="ti ti-droplet"></i> Carga viral del tubo</h4>
-      <dl class="gv-kv"><dt>Valor</dt><dd>${gvCeldaCV(m)}${gvCV(g) != null && !p ? ` <a href="#" style="font-size:11px;margin-left:6px" onclick="event.preventDefault();gvCorregirCV('${od}')">corregir</a>` : ''}</dd>
+      <dl class="gv-kv"><dt>Ingreso de CV VIH</dt><dd>${gvChipCV(m)}</dd><dt>Valor</dt><dd>${gvCeldaCV(m)}${gvCV(g) != null && !p ? ` <a href="#" style="font-size:11px;margin-left:6px" onclick="event.preventDefault();gvCorregirCV('${od}')">corregir</a>` : ''}</dd>
       <dt>Regla</dt><dd style="font-size:11.5px;color:var(--text2)">&lt; ${GV_UMBRAL_CV} copias/mL → no se realiza · ≥ ${GV_UMBRAL_CV} → apta</dd></dl></div>
     <div class="gv-sec"><details class="gv-opc"><summary>Datos clínicos (opcionales)</summary><div class="gv-grid2">
       ${clin('dx', 'Año de diagnóstico', 'ej. 2019')}
