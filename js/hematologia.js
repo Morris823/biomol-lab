@@ -11,14 +11,18 @@
 // todavía no se han escaneado en Recepción; al escanearlas, la marca se borra.
 // ============================================================
 const COD_HEMOLEUCOGRAMA = '1001934';
+// Pruebas de hematología que se descargan para el rescate (mismo tubo de sangre total):
+// 1001934 hemoleucograma · 1001929 hemoglobina glicosilada · 1000164 VSG
+const CODIGOS_HEMATO_RESCATE = new Set(['1001934', '1001929', '1000164']);
 const PRUEBAS_MANUALES_SANGRE = new Set(['HLA B27', 'HLA B57', 'Hemocr.', 'MTHFR', 'Homocist.']);
 let hematoOdIds = new Set();   // OD_ID de los ingresos marcados con hemograma
 let hematoFiltro = 'todas';    // 'todas' | 'sin' | 'ges'
 
 function esHemoleucograma(codigo, nombre) {
-  if (String(codigo || '').trim() === COD_HEMOLEUCOGRAMA) return true;
+  if (CODIGOS_HEMATO_RESCATE.has(String(codigo || '').trim())) return true;
   const n = (nombre || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  return n.includes('HEMOLEUCOGRAMA') || n.includes('CUADRO HEMATICO');
+  return n.includes('HEMOLEUCOGRAMA') || n.includes('CUADRO HEMATICO') || n.includes('GLICOSILADA')
+      || n.includes('SEDIMENTACION') || /\bVSG\b/.test(n);
 }
 
 // Lee de las filas crudas del Excel los códigos de muestra que traen hemoleucograma
@@ -222,7 +226,7 @@ async function procesarHemogramas(event) {
     const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
     const nrosHemo = nrosConHemograma(rows);
-    if (!nrosHemo.size) { toast('El archivo no trae hemoleucogramas (código 1001934)', 'err'); return; }
+    if (!nrosHemo.size) { toast('El archivo no trae hemoleucograma, glicosilada ni VSG (1001934, 1001929, 1000164)', 'err'); return; }
 
     // Solo se consultan los tubos del archivo (consulta pequeña, por lotes de 100)
     const nros = [...nrosHemo];
