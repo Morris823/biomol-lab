@@ -46,7 +46,7 @@ const MOTIVOS = [
   {cod:'9392', desc:'Se ha producido un error inesperado al ejecutar la operación solicitada'},
   {cod:'CONF',  desc:'Confirmación de carga y/o resultado'},
   {cod:'CTRL+', desc:'Fallo de control positivo'},
-  {cod:'OTRO',  desc:'Otro — especificar en observaciones'},
+  {cod:'OTRO',  desc:'Otro — escribir la razón o circunstancia'},
 ];
 let acIdx = -1;
 
@@ -83,11 +83,17 @@ function selectMotivo(cod, desc) {
   const el=document.getElementById('sel-motivo');
   el.style.display='flex';
   document.getElementById('sel-motivo-txt').textContent=`${cod} — ${desc}`;
+  // OTRO: se escribe la razón o circunstancia
+  const otro = cod === 'OTRO';
+  document.getElementById('rep-otro-wrap').style.display = otro ? 'block' : 'none';
   closeAc();
+  if (otro) setTimeout(() => document.getElementById('rep-otro-nota').focus(), 50);
 }
 
 function clearMotivo() {
   selectedMotivo=null;
+  document.getElementById('rep-otro-wrap').style.display='none';
+  document.getElementById('rep-otro-nota').value='';
   document.getElementById('rep-motivo-input').value='';
   document.getElementById('rep-motivo-input').placeholder="Ej: 5011 o 'aspiración'...";
   document.getElementById('sel-motivo').style.display='none';
@@ -170,6 +176,14 @@ async function registrarReproceso(esNuevaMuestra) {
     return;
   }
   if (!selectedMotivo) { toast('Selecciona un motivo', 'err'); return; }
+  // Con OTRO, la nota es obligatoria y reemplaza la descripción genérica
+  const notaOtro = (document.getElementById('rep-otro-nota')?.value || '').trim();
+  if (selectedMotivo.cod === 'OTRO' && !notaOtro) {
+    toast('Escribe la razón, motivo o circunstancia', 'err');
+    document.getElementById('rep-otro-nota').focus();
+    return;
+  }
+  const descMotivo = selectedMotivo.cod === 'OTRO' ? notaOtro : selectedMotivo.desc;
   const elegida = repCandidatos.find(c => c.prueba === prueba);
   const ingreso = allMuestras.find(m => m.nro_muestra === cod || m.od_id === cod);
   const od = elegida?.od_id || ingreso?.od_id || cod;
@@ -182,7 +196,7 @@ async function registrarReproceso(esNuevaMuestra) {
   if (esNuevaMuestra) {
     const {error} = await sb.from('nuevas_muestras').insert({
       od_id: od, nro_muestra: cod, estudio_nombre: prueba,
-      motivo: selectedMotivo.cod + ' — ' + selectedMotivo.desc,
+      motivo: selectedMotivo.cod + ' — ' + descMotivo,
       registrado_por: currentUser
     });
     if (error) { toast('Error: '+error.message,'err'); return; }
@@ -190,7 +204,7 @@ async function registrarReproceso(esNuevaMuestra) {
   } else {
     const {error} = await sb.from('reprocesos').insert({
       od_id: od, nro_muestra: cod, estudio_nombre: prueba,
-      codigo_motivo: selectedMotivo.cod, desc_motivo: selectedMotivo.desc,
+      codigo_motivo: selectedMotivo.cod, desc_motivo: descMotivo,
       registrado_por: currentUser
     });
     if (error) { toast('Error: '+error.message,'err'); return; }
