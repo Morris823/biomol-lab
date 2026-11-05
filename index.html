@@ -283,6 +283,7 @@
         <div class="page" id="page-ingresos">
           <div class="panel">
             <div class="panel-header"><span class="panel-title"><i class="ti ti-file-spreadsheet"></i> Importar ingresos de LabCore</span></div>
+            <div id="ultima-ingresos" style="padding:8px 16px;background:var(--bg2);border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text)"></div>
             <div style="padding:16px">
               <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
                 ondragover="event.preventDefault();this.style.background='var(--bg3)'"
@@ -603,6 +604,7 @@
               <strong>Subir hemogramas:</strong> descarga de LabCore el Excel solo de hematología y súbelo aquí <strong>después</strong> de los ingresos del mismo corte; el archivo no se guarda, solo se cruza.
               Al escanearla en Recepción sale sola de esta lista. Si ya no va a llegar (por ejemplo, le anularon el ingreso), escribe la nota y márcala como gestionada: queda en verde y deja de contar.
             </div>
+            <div id="ultima-hemogramas" style="padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--border);font-size:12px;color:var(--text)"></div>
             <table>
               <thead><tr>
                 <th onclick="sortTable('hemato-tabla',0)" style="cursor:pointer">Código <i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i></th>
@@ -1281,5 +1283,6 @@
 <script src="js/estadistica.js"></script>
 <script src="js/sedes.js"></script>
 <script src="js/genotipo.js"></script>
+<script src="js/subidas.js"></script>
 </body>
 </html>

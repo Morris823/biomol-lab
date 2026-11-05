@@ -26,6 +26,7 @@ function nav(name, el) {
   if (name === 'validacion') loadValHist();
   if (name === 'sin-ingreso') loadSinIngreso();
   if (name === 'hematologia') loadRescateHemato();
+  if (name === 'ingresos') cargarUltimaSubida('ingresos');
   if (name === 'anulados') loadAnulados();
   if (name === 'matriculas') initMatriculas();
   if (name === 'tuberculosis') initTB();

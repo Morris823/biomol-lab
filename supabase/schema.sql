@@ -506,3 +506,22 @@ create policy acceso_app on public.genotipo_posiciones for all to public using (
 alter table public.genotipo_correos enable row level security;
 drop policy if exists acceso_app on public.genotipo_correos;
 create policy acceso_app on public.genotipo_correos for all to public using (true);
+
+
+-- ============================================================
+-- Historial de subidas de Excel (Ingresos y Rescatar de hematología)
+-- ============================================================
+create table if not exists public.importaciones (
+  id uuid primary key default gen_random_uuid(),
+  tipo text not null,            -- 'ingresos' | 'hemogramas'
+  archivo text,
+  filas integer,
+  nuevos integer,
+  detalle text,
+  importado_por text,
+  created_at timestamptz default now()
+);
+create index if not exists idx_importaciones_tipo_fecha on public.importaciones (tipo, created_at desc);
+alter table public.importaciones enable row level security;
+drop policy if exists acceso_app on public.importaciones;
+create policy acceso_app on public.importaciones for all to public using (true);

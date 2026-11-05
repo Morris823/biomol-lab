@@ -102,6 +102,7 @@ async function quitarMarcaHemato(nro, pruebas) {
 }
 
 async function loadRescateHemato() {
+  cargarUltimaSubida('hemogramas');
   await cargarMarcasHemato();
   const porTubo = new Map();   // un tubo puede tener 2 pruebas manuales: una sola fila
   muestrasRescateHemato().forEach(m => {
@@ -248,6 +249,7 @@ async function procesarHemogramas(event) {
     msg += ` · ${nuevas} nueva${nuevas === 1 ? '' : 's'} para rescatar`;
     if (yaMarcadas) msg += ` · ${yaMarcadas} ya estaba${yaMarcadas === 1 ? '' : 'n'} en la lista`;
     toast(msg, 'ok');
+    registrarSubida('hemogramas', file.name, rows.length, nuevas, msg);
     if (!tubosNuestros) toast('Ningún hemograma coincide con nuestros ingresos. ¿Ya se subió el Excel de ingresos de este corte?', 'info');
     actualizarBadgeHemato();
     await loadRescateHemato();
