@@ -140,6 +140,7 @@ async function processIngresosFile(file) {
         (nTubos2 ? ` · ${nTubos2} segundo(s) tubo(s) de la misma orden` : '') +
         (excluidas.length ? ` · ${excluidas.length} omitidos (VIH/VPH de otras regionales)` : '') +
         (conHemo ? ` · ${conHemo} con hemograma para rescatar de hematología` : ''), 'ok');
+  registrarSubida('ingresos', file.name, rows.length, nuevos, `${dups + repetidosArchivo} ya existían${fallidos.length ? ' · ' + fallidos.length + ' sin guardar' : ''}`);
 }
 
 // Guarda los tubos adicionales de órdenes con dos tubos. El principal es el código
