@@ -64,6 +64,23 @@ async function handleValFile(e) {
 
   let count = 0, errores = 0;
   const BATCH = 50;
+  const fallidos = [];   // {od_id, motivo}
+  // Guarda un lote de validaciones. Un OD_ID repetido dentro del mismo upsert hace que
+  // Supabase rechace el lote COMPLETO ("cannot affect row a second time"): pasa con las
+  // órdenes de dos tubos (mismo OD_ID). Por eso se deja una fila por OD_ID y, si aun así
+  // el lote falla, se reintenta fila por fila para no perder las buenas.
+  async function guardarLote(filas) {
+    const unicas = [...new Map(filas.map(f => [f.od_id, f])).values()];
+    const {error} = await sb.from('validaciones').upsert(unicas, {onConflict: 'od_id'});
+    if (!error) return unicas.length;
+    console.error('Lote de validados rechazado, reintentando fila por fila:', error);
+    let ok = 0;
+    for (const f of unicas) {
+      const {error: e1} = await sb.from('validaciones').upsert(f, {onConflict: 'od_id'});
+      if (e1) fallidos.push({ od_id: f.od_id, motivo: e1.message }); else ok++;
+    }
+    return ok;
+  }
 
   // Para los ingresos manuales el cruce NO es por OD_ID (puede no existir) sino por
   // el código de muestra de LabCore, que el archivo de validados también trae.
@@ -122,15 +139,7 @@ async function handleValFile(e) {
       progLbl.textContent = `Importando... ${Math.min(i+BATCH, rows.length)} de ${rows.length}`;
     }
     try {
-      const {error} = await sb.from('validaciones')
-        .upsert(toUpsert, {onConflict: 'od_id'});
-      if (error) {
-        console.error('Batch val error:', error);
-        errores += toUpsert.length;
-        toast('Error en lote: ' + error.message, 'err');
-      } else {
-        count += toUpsert.length;
-      }
+      count += await guardarLote(toUpsert);
     } catch(err) {
       console.error('Fetch error:', err);
       errores += toUpsert.length;
@@ -172,9 +181,8 @@ async function handleValFile(e) {
     }
     for (let i = 0; i < pendientes.length; i += BATCH) {
       const lote = pendientes.slice(i, i + BATCH);
-      const {error} = await sb.from('validaciones').upsert(lote, {onConflict: 'od_id'});
-      if (error) { console.error('Batch manual error:', error); errores += lote.length; }
-      else { manuales += lote.length; count += lote.length; }
+      const n = await guardarLote(lote);
+      manuales += n; count += n;
     }
   }
 
@@ -193,6 +201,8 @@ async function handleValFile(e) {
   e.target.value = '';
   setTimeout(() => { if(progArea) progArea.style.display='none'; }, 3000);
   const sufijoMan = manuales ? ` · ${manuales} manual(es) cruzado(s) por código de muestra` : '';
+  errores += fallidos.length;
+  if (fallidos.length) { console.table(fallidos); toast(`${fallidos.length} validado(s) no se guardaron: ${fallidos.slice(0, 3).map(f => f.od_id + ' (' + f.motivo + ')').join('; ')}${fallidos.length > 3 ? '…' : ''}`, 'err'); }
   if (errores > 0) toast(`${count} validados importados (${errores} con error)${sufijoMan}`, 'info');
   else toast(`✓ ${count} validados importados correctamente${sufijoMan}`, 'ok');
 }
