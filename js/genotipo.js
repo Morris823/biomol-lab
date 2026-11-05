@@ -197,7 +197,18 @@ function gvRender() {
   else gvRenderCorridas();
   gvActualizarBadge();
   if (gvAbierto) gvRenderDrawer();
+  gvAjustarAlto();
 }
+// La tabla ocupa justo el espacio que queda hasta el borde inferior de la pantalla, con
+// su propio scroll: así la barra horizontal siempre se ve sin tener que bajar al final.
+function gvAjustarAlto() {
+  document.querySelectorAll('#page-genotipo .gv-tabla-wrap').forEach(w => {
+    if (!w.offsetParent) return;
+    const libre = window.innerHeight - w.getBoundingClientRect().top - 18;
+    w.style.maxHeight = Math.max(260, libre) + 'px';
+  });
+}
+window.addEventListener('resize', () => { if (document.getElementById('page-genotipo')?.classList.contains('active')) gvAjustarAlto(); });
 function gvIrTab(t) { gvTab = t; gvRender(); }
 function gvActualizarBadge() {
   const b = document.getElementById('badge-genotipo'); if (!b || !gvCargado) return;
@@ -517,7 +528,7 @@ function gvRenderCorridas() {
         : c.estado === 'secuenciacion' ? `<button class="btn" onclick="gvReemplazar('${c.id}')"><i class="ti ti-replace"></i> Reemplazar no amplificadas</button><button class="btn" onclick="gvReabrir('${c.id}')">Volver a armando</button><button class="btn btn-green" style="margin-left:auto" onclick="gvCerrarCorrida('${c.id}')"><i class="ti ti-lock"></i> Cerrar corrida</button>`
         : '<span class="gv-sub">Corrida cerrada — solo consulta.</span>'}
       </div>
-      <div style="overflow:auto;max-height:calc(100vh - 360px)"><table><thead><tr><th>ID</th><th>Código</th><th>Paciente</th><th>CV</th><th>Extracción</th><th>Amplificación</th><th></th></tr></thead>
+      <div class="gv-tabla-wrap"><table><thead><tr><th>ID</th><th>Código</th><th>Paciente</th><th>CV</th><th>Extracción</th><th>Amplificación</th><th></th></tr></thead>
       <tbody>${filas || '<tr><td colspan="7" class="empty-state">Agrega muestras de la cola de aptas o escanea el tubo</td></tr>'}</tbody></table></div>`}
     </div>
     <div class="gv-nota"><b>Reglas:</b> el ID es la letra + la posición. Se puede extraer en dos partes; la secuenciación es con 24 que amplificaron. Si una <b>no amplifica</b> conserva su ID y queda <i>Sin resultado</i>; con <b>Reemplazar</b> entra la siguiente de la cola (por eso una corrida puede pasar de 24). <i class="ti ti-repeat"></i> repite la extracción de una muestra en la misma corrida. En el año nuevo la letra vuelve a la A.</div>`;

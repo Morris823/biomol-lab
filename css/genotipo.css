@@ -110,3 +110,8 @@ details.gv-opc summary{cursor:pointer;font-size:12px;color:var(--text2)}
 .gv-nota b{color:var(--text)}
 .gv-fase2{border:1px dashed var(--border2);border-radius:var(--radius);padding:14px;color:var(--text2);font-size:12px;line-height:1.6}
 .gv-fase2 code{font-family:var(--mono);font-size:11px;background:var(--bg2);padding:1px 5px;border-radius:4px}
+
+/* Tabla de muestras: alto fijo con su propio scroll, para que la barra horizontal
+   quede siempre visible abajo y los encabezados se queden fijos arriba */
+.gv-tabla-wrap{overflow:auto;max-height:calc(100vh - 330px)}
+.gv-tabla-wrap thead th{position:sticky;top:0;z-index:2}
