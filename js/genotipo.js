@@ -524,7 +524,8 @@ function gvRenderCorridas() {
           <button class="btn btn-primary" onclick="gvVerCola('${c.id}')"><i class="ti ti-plus"></i> Agregar de la cola (${cola.length})</button>
           <button class="btn" onclick="gvAgregarVer('${c.id}')"><i class="ti ti-flask-2"></i> Verificación</button>
           <button class="btn" onclick="gvMarcarExt('${c.id}',1)">${c.fecha_ext1 ? '✓ ' : ''}Extracción 1</button><button class="btn" onclick="gvMarcarExt('${c.id}',2)">${c.fecha_ext2 ? '✓ ' : ''}Extracción 2</button>
-          <button class="btn btn-green" style="margin-left:auto" onclick="gvASecuenciar('${c.id}')"><i class="ti ti-send"></i> Enviar a secuenciación</button>`
+          <button class="btn btn-red" style="margin-left:auto" title="Borrar esta corrida (solo mientras se arma)" onclick="gvEliminarCorrida('${c.id}')"><i class="ti ti-trash"></i> Eliminar corrida</button>
+          <button class="btn btn-green" onclick="gvASecuenciar('${c.id}')"><i class="ti ti-send"></i> Enviar a secuenciación</button>`
         : c.estado === 'secuenciacion' ? `<button class="btn" onclick="gvReemplazar('${c.id}')"><i class="ti ti-replace"></i> Reemplazar no amplificadas</button><button class="btn" onclick="gvReabrir('${c.id}')">Volver a armando</button><button class="btn btn-green" style="margin-left:auto" onclick="gvCerrarCorrida('${c.id}')"><i class="ti ti-lock"></i> Cerrar corrida</button>`
         : '<span class="gv-sub">Corrida cerrada — solo consulta.</span>'}
       </div>
@@ -625,6 +626,28 @@ async function gvASecuenciar(cid) {
   if (await gvEstadoCorrida(cid, 'secuenciacion', { fecha_seq: hoyCO() })) toast(`Corrida ${c.letra} en secuenciación`, 'ok');
 }
 async function gvReabrir(cid) { await gvEstadoCorrida(cid, 'armando'); }
+// Solo se puede borrar una corrida que se está armando. Sus muestras vuelven a la cola;
+// si alguna quedó como "no amplificó" por esta corrida, se le quita esa marca.
+async function gvEliminarCorrida(cid) {
+  const c = gvCorrida(cid); if (!c) return;
+  if (c.estado !== 'armando') { toast('Solo se pueden eliminar corridas que se están armando', 'err'); return; }
+  const ps = gvPosC(c), pac = ps.filter(p => p.od_id && !p.repetida);
+  const msg = `¿Eliminar la corrida ${c.letra}-${c.anio}?` + (ps.length
+    ? `\n\nTiene ${ps.length} posición(es)${pac.length ? ` con ${pac.length} muestra(s), que vuelven a la cola de aptas` : ''}. Esto no se puede deshacer.`
+    : '\n\nEstá vacía.');
+  if (!confirm(msg)) return;
+  for (const p of pac) {
+    const otras = gvPos.some(x => x.od_id === p.od_id && x.corrida_id !== cid && !x.repetida);
+    if (!otras && p.amplificacion === 'no' && gvG(p.od_id).estado === 'sin') await gvGuardar(p.od_id, { estado: null }, true);
+  }
+  const {error} = await sb.from('genotipo_corridas').delete().eq('id', cid);   // las posiciones se borran en cascada
+  if (error) { toast('No se pudo eliminar: ' + error.message, 'err'); return; }
+  gvPos = gvPos.filter(p => p.corrida_id !== cid);
+  gvCorridas = gvCorridas.filter(x => x.id !== cid);
+  gvCorrSel = null;
+  toast(`Corrida ${c.letra}-${c.anio} eliminada${pac.length ? ` · ${pac.length} muestra(s) de vuelta en la cola` : ''}`, 'ok');
+  gvRender();
+}
 async function gvCerrarCorrida(cid) {
   const c = gvCorrida(cid);
   const pend = gvPosC(c).filter(p => !p.verificacion && !p.repetida && p.amplificacion === 'pend').length;
