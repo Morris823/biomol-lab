@@ -29,7 +29,7 @@ function nav(name, el) {
   if (name === 'ingresos') cargarUltimaSubida('ingresos');
   if (name === 'anulados') loadAnulados();
   if (name === 'matriculas') initMatriculas();
-  if (name === 'tuberculosis') initTB();
+  if (name === 'tuberculosis') { initTB(); initOportunidadTB(); }
   if (name === 'recepcion') loadRecepciones();
   if (name === 'correo') initCorreo();
   if (name === 'revision-manuales') cargarSeguimiento('manuales');

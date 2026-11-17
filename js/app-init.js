@@ -21,6 +21,7 @@ async function initApp() {
     fromG += 1000;
   }
   await loadMuestras({force:true});
+  if (typeof actualizarBadgeTB === 'function') actualizarBadgeTB();
   setupRealtime();
   nav('dashboard', document.querySelector('.nav-item'));
   const {count} = await sb.from('recepciones').select('*',{count:'exact',head:true}).eq('sin_ingreso',true);
@@ -132,6 +133,8 @@ function setupRealtime() {
     // Si el usuario lleva más de 5 min inactivo, no recargar
     if (Date.now() - lastActivity > 300000) return;
     await loadMuestras({ force: true });
+    if (typeof actualizarBadgeTB === 'function') actualizarBadgeTB();
+    if (document.getElementById('page-tuberculosis').classList.contains('active') && typeof renderOportunidadTB === 'function') renderOportunidadTB();
     if (document.getElementById('page-dashboard').classList.contains('active')) renderDashboard();
     if (document.getElementById('page-muestras').classList.contains('active')) applyFilters();
     if (document.getElementById('page-pendientes').classList.contains('active')) loadPendientes();

@@ -153,7 +153,7 @@
     </div>
     <div class="nav-section">
       <div class="nav-label">Equipos — Tuberculosis</div>
-      <div class="nav-item" onclick="nav('tuberculosis',this)"><i class="ti ti-lungs"></i> Corridas TB</div>
+      <div class="nav-item" onclick="nav('tuberculosis',this)"><i class="ti ti-lungs"></i> Corridas TB <span class="badge" id="badge-tb-op" style="display:none"></span></div>
       <div class="nav-item" onclick="nav('revision-tb',this)"><i class="ti ti-lungs"></i> Revisión pendientes — TB</div>
     </div>
     <div class="nav-section">
@@ -720,6 +720,25 @@
 
         <!-- TUBERCULOSIS -->
         <div class="page" id="page-tuberculosis">
+          <!-- Oportunidad TB: meta 48 h desde recepción (Res. 227 de 2020) -->
+          <div class="panel" id="tb-op-panel" style="margin-bottom:14px">
+            <div class="panel-header">
+              <span class="panel-title"><i class="ti ti-clock-hour-4"></i> Oportunidad — meta 48 h desde la recepción</span>
+              <span style="font-size:11px;color:var(--text3)" id="tb-op-resumen"></span>
+              <div class="chips" id="tb-op-chips" style="margin-left:auto">
+                <span class="chip active" onclick="chipTBOp(this,'todas')">Todas</span>
+                <span class="chip" onclick="chipTBOp(this,'alerta')">36 h o más</span>
+              </div>
+            </div>
+            <div id="tb-op-kpis" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:12px 14px"></div>
+            <div style="max-height:280px;overflow:auto;border-top:0.5px solid var(--border)">
+              <table><thead><tr><th>Código</th><th>Paciente</th><th>Sede</th><th>Recibida</th><th>Horas</th><th>Vence (48 h)</th><th>Corrida</th><th>Estado</th></tr></thead>
+              <tbody id="tb-op-tabla"><tr><td colspan="8" class="empty-state">Cargando...</td></tr></tbody></table>
+            </div>
+            <div style="padding:8px 14px;font-size:10.5px;color:var(--text3);border-top:0.5px solid var(--border)">
+              Horas corridas (los fines de semana y festivos cuentan). <span style="color:var(--yellow)">●</span> desde 36 h hay que montarla ya · <span style="color:var(--red)">●</span> más de 48 h incumple la Resolución 227 de 2020.
+            </div>
+          </div>
           <div style="display:flex;gap:12px;align-items:flex-start">
 
             <!-- Panel principal -->
@@ -1284,5 +1303,7 @@
 <script src="js/sedes.js"></script>
 <script src="js/genotipo.js"></script>
 <script src="js/subidas.js"></script>
+<script src="js/oportunidad-tb.js"></script>
+<script src="js/vista-lab.js"></script>
 </body>
 </html>
