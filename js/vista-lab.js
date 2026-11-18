@@ -82,7 +82,7 @@
     extraccion:    { nombre: 'Equipos m2000',                icono: 'ti-cpu',          inicio: 'reprocesos',   secciones: ['reprocesos', 'estadistica'] },
     amplificacion: { nombre: 'Pruebas manuales y Genotipo',  icono: 'ti-layout-grid',  inicio: 'matriculas',   secciones: ['matriculas', 'revision-manuales', 'remisiones', 'genotipo'] },
     tb:            { nombre: 'Tuberculosis',                 icono: 'ti-lungs',        inicio: 'tuberculosis', secciones: ['tuberculosis', 'revision-tb'] },
-    validacion:    { nombre: 'Validación',                   icono: 'ti-circle-check', inicio: 'validacion',   secciones: ['validacion', 'estadistica', 'descarte'] },
+    validacion:    { nombre: 'Validación',                   icono: 'ti-circle-check', inicio: 'validacion',   secciones: ['validacion', 'reprocesos', 'estadistica', 'descarte'] },
     descarte:      { nombre: 'Neveras y descarte',           icono: 'ti-trash',        inicio: 'descarte',     secciones: ['descarte', 'remisiones'] },
   };
   const COMUNES = ['dashboard', 'checklist', 'muestras'];   // visibles en cualquier área
