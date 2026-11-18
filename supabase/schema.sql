@@ -525,3 +525,8 @@ create index if not exists idx_importaciones_tipo_fecha on public.importaciones 
 alter table public.importaciones enable row level security;
 drop policy if exists acceso_app on public.importaciones;
 create policy acceso_app on public.importaciones for all to public using (true);
+-- Cierre de turno por área: guarda quién cerró cada área, sus novedades y los
+-- pendientes que quedaron (para la Entrega de turno del día siguiente).
+-- Correr ANTES de pasar la rama a main.
+alter table public.checklist_turno
+  add column if not exists cierres_area jsonb default '{}'::jsonb;

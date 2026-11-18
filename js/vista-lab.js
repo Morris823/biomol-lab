@@ -30,6 +30,12 @@
       uno(sb.from('corridas_tb').select('corr_id,created_at').order('created_at', { ascending: false }).limit(1)),
       uno(sb.from('registros_descarte').select('fecha_descarte').order('fecha_descarte', { ascending: false }).limit(1)),
     ]);
+    // Cierre de turno de hoy (una fila)
+    const cl = await uno(sb.from('checklist_turno').select('*').eq('fecha', hoyCO()).limit(1));
+    const cierres = typeof cierresDe === 'function' ? cierresDe(cl) : {};
+    const totalAreas = typeof AREAS_CIERRE !== 'undefined' ? AREAS_CIERRE.length : 5;
+    const nCerradas = typeof AREAS_CIERRE !== 'undefined' ? AREAS_CIERRE.filter(a => cierres[a.id]?.fecha).length : 0;
+    const txtCierre = area => { const x = cierres[area]; return x && x.fecha ? `Cerrada · ${(x.por || '').split(' ')[0]}${x.legado ? '' : ' ' + fmtHora(x.fecha)}` : 'Sin cerrar'; };
     const posUlt = ultMat ? await contar(sb.from('matricula_posiciones').select('id', head).eq('matricula_id', ultMat.id).eq('es_control', false)) : 0;
 
     // Recepción
@@ -49,7 +55,7 @@
     const sinVal = M.filter(m => m.estado === 'sin-validar').length;
     const remitidas = M.filter(m => m.estado === 'remitida');
 
-    return {
+    const z = {
       recepcion: { pin: miles(pend.length), cap: 'por recibir', st: pend.length > 150 ? 'warn' : 'ok',
         metrics: [['Escaneadas hoy', miles(escHoy)], ['Pendientes por recibir', `${miles(pend.length)} pruebas · ${miles(tubos(pend))} tubos`], ['Sin ingreso', miles(sinIng)], ['Por rescatar de hematología', miles(rescate)]] },
       extraccion: { name: 'Equipos · m2000sp / m2000rt', pin: miles(repAct), cap: 'reprocesos activos', st: repAct > 20 ? 'warn' : 'ok',
@@ -64,7 +70,11 @@
       descarte: { name: 'Neveras, remisiones y descarte', pin: miles(remitidas.length), cap: 'en laboratorio externo', st: 'ok',
         metrics: [['Remitidas sin resultado', miles(remitidas.length)], ['Último descarte', ultDesc ? fmt(ultDesc.fecha_descarte) : '—']] },
     };
+    for (const id in z) z[id].metrics.push(['Cierre de turno', txtCierre(ZONA_A_CIERRE[id])]);
+    return { zonas: z, cierre: { cerradas: nCerradas, total: totalAreas } };
   }
+  // Zona del plano → área del cierre de turno
+  const ZONA_A_CIERRE = { recepcion: 'recepcion', extraccion: 'equipos', amplificacion: 'manuales', tb: 'tb', validacion: 'validacion', descarte: 'validacion' };
 
   // ---------------- Áreas del laboratorio → secciones del gestor ----------------
   const AREAS = {
@@ -177,7 +187,13 @@
       if (anterior !== d.zona) toast(anterior ? `Te pasaste a ${n}` : `Bienvenido/a a ${n}`, 'ok');
     }
     if (d.type === 'vista-cerrar') cerrarLobby();
-    if ((d.type === 'vista-entrar' || d.type === 'vista-cerrar') && entregaPendiente) {
+    // La puerta del laboratorio: ir al cierre de turno (del área donde está, si ya eligió una)
+    if (d.type === 'vista-cierre') {
+      if (!areaActual) aplicarArea('todas');
+      cerrarLobby();
+      irACierreArea(ZONA_A_CIERRE[areaActual] || null);
+    }
+    if ((d.type === 'vista-entrar' || d.type === 'vista-cerrar' || d.type === 'vista-cierre') && entregaPendiente) {
       entregaPendiente = false;
       setTimeout(() => { if (window._modalEntrega) window._modalEntrega.style.display = 'flex'; else entregaOriginal(); }, 350);
     }
@@ -188,9 +204,9 @@
     if (calculando || (!force && Date.now() - ultimoEnvio < 60000)) return;
     calculando = true;
     try {
-      const zonas = await calcularZonas();
+      const { zonas, cierre } = await calcularZonas();
       for (const id in zonas) zonas[id].secciones = AREAS[id] ? [...AREAS[id].secciones, ...COMUNES.filter(c => c !== 'checklist')].map(etiqueta) : [];
-      post({ type: 'vista-datos', zonas });
+      post({ type: 'vista-datos', zonas, cierre });
       ultimoEnvio = Date.now();
     } catch (err) { console.error('Vista del laboratorio:', err); }
     calculando = false;

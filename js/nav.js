@@ -8,7 +8,7 @@ const PAGE_TITLES = {
   muestras:'Todas las muestras', matriculas:'Pruebas manuales — Matrículas',
   tuberculosis:'Tuberculosis — Corridas', correo:'Generar correo',
   'revision-manuales':'Revisión de pendientes — Manuales', 'revision-tb':'Revisión de pendientes — TB',
-  checklist:'Cierre de turno — Bacteriólogos', descarte:'Descarte de muestras',
+  checklist:'Cierre de turno', descarte:'Descarte de muestras',
   remisiones:'Remisiones', genotipo:'Genotipo VIH (NGS)'
 };
 

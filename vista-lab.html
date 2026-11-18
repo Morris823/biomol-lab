@@ -209,6 +209,7 @@ const RUTAS = {
   descarte:      [[10.5, 5.2], [10.5, 9.6]],
 };
 const PUERTA = [18.8, 5.2];
+let CIERRE = null;   // {cerradas, total} — la puerta es el cierre de turno
 const spotOf = id => RUTAS[id][RUTAS[id].length - 1];
 const zoneAt = (i, j) => ZONES.find(z => i >= z.a[0] && i < z.a[2] && j >= z.a[1] && j < z.a[3]) || null;
 const stColor = s => ({ ok: T.green, warn: T.yellow, crit: T.red, info: T.accent })[s];
@@ -375,7 +376,7 @@ function drawPug(d, t) {
   const F = P(d.i, d.j, 0), x = F.x, fl = d.flip, ph = t * 16 + d.seed;
   const run = d.moving && !reduce;
   const y = F.y - (run ? Math.abs(Math.sin(ph)) * 1.8 : 0);
-  const fawn = '#D9B07B', mask = '#2B2420', K = 1.3;   // un poco más grande que a escala real, para que se vea
+  const fawn = '#9A6A3E', mask = '#2A1A10', K = 1.3;   // marrón   // un poco más grande que a escala real, para que se vea
   ctx.save(); ctx.translate(x, F.y); ctx.scale(K, K); ctx.translate(-x, -F.y);
   ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x, F.y, 7.5, 3.2, 0, 0, 7); ctx.fill();
   // cola enroscada (atrás)
@@ -405,7 +406,7 @@ function drawPug(d, t) {
   labels.push(() => {
     ctx.font = '600 9px Inter, system-ui, sans-serif';
     const tw = ctx.measureText(d.name).width + 10, ny = topY - 20;
-    rr(x - tw / 2, ny, tw, 12, 6); ctx.fillStyle = T.surface; ctx.fill(); ctx.strokeStyle = '#B98A4E'; ctx.lineWidth = 1; ctx.stroke();
+    rr(x - tw / 2, ny, tw, 12, 6); ctx.fillStyle = T.surface; ctx.fill(); ctx.strokeStyle = '#9A6A3E'; ctx.lineWidth = 1; ctx.stroke();
     ctx.fillStyle = T.text2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(d.name, x, ny + 6.3);
   });
 }
@@ -639,6 +640,26 @@ function drawPins(t) {
     ctx.font = '500 10.5px Inter, system-ui, sans-serif'; ctx.fillStyle = T.text2; ctx.fillText(z.cap, x + 22 + w1 + 6, y + 28);
     pinRects.push({ id: z.id, x, y, w, h: h + 6 });
   });
+  // Puerta = cierre de turno
+  if (CIERRE) {
+    const a = P(PUERTA[0] - .1, PUERTA[1] - 1.5, 1.4), bob = reduce ? 0 : Math.sin(t * 1.8 + 9) * 2;
+    const todas = CIERRE.cerradas >= CIERRE.total, head = 'CIERRE DE TURNO', pin = `${CIERRE.cerradas}/${CIERRE.total}`, cap = 'áreas cerradas';
+    ctx.font = '700 13px "JetBrains Mono", ui-monospace, monospace'; const w1 = ctx.measureText(pin).width;
+    ctx.font = '500 10.5px Inter, system-ui, sans-serif'; const w2 = ctx.measureText(cap).width;
+    ctx.font = '600 10px Inter, system-ui, sans-serif'; const w3 = ctx.measureText(head).width;
+    const w = Math.max(w1 + w2 + 8, w3) + 34, h = 36, x = a.x - w / 2, y = a.y - h - 9 + bob, hov = hover === 'cierre';
+    ctx.fillStyle = 'rgba(0,0,0,.12)'; rr(x + 1, y + 2, w, h, 9); ctx.fill();
+    rr(x, y, w, h, 9); ctx.fillStyle = todas ? T['green-bg'] : T.surface; ctx.fill();
+    ctx.strokeStyle = hov ? T.text : T.text3; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(a.x - 5, y + h - .5); ctx.lineTo(a.x, y + h + 6); ctx.lineTo(a.x + 5, y + h - .5); ctx.closePath(); ctx.fillStyle = T.surface; ctx.fill();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '14px system-ui'; ctx.fillStyle = todas ? T.green : T.text2;
+    ctx.fillText(todas ? '✓' : '🔒', x + 14, y + 22);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.font = '600 10px Inter, system-ui, sans-serif'; ctx.fillStyle = T.text3; ctx.fillText(head, x + 26, y + 13);
+    ctx.font = '700 13px "JetBrains Mono", ui-monospace, monospace'; ctx.fillStyle = todas ? T.green : T.text; ctx.fillText(pin, x + 26, y + 28);
+    ctx.font = '500 10.5px Inter, system-ui, sans-serif'; ctx.fillStyle = T.text2; ctx.fillText(cap, x + 26 + w1 + 6, y + 28);
+    pinRects.push({ id: 'cierre', x, y, w, h: h + 6 });
+  }
 }
 
 /* ---------- Movimiento ---------- */
@@ -728,7 +749,7 @@ function renderDetail(force) {
     <dl class="metrics">${z.metrics.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
     ${z.secciones.length ? `<ul class="secs"><li class="lbl" style="list-style:none">Se abre en el gestor</li>${z.secciones.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}
     <div class="people"><div class="lbl">En esta zona ahora</div>
-      ${here.length ? here.map(p => `<div class="person"><span class="av" style="background:${p.isPug ? '#B98A4E' : p.color}">${p.isPug ? '🐾' : p.name[0]}</span><div><div class="pn">${p.full || p.name} · ${p.role}</div><div class="pa">${p.label}</div></div></div>`).join('') : '<div class="empty">Nadie trabajando aquí en este momento</div>'}
+      ${here.length ? here.map(p => `<div class="person"><span class="av" style="background:${p.isPug ? '#9A6A3E' : p.color}">${p.isPug ? '🐾' : p.name[0]}</span><div><div class="pn">${p.full || p.name} · ${p.role}</div><div class="pa">${p.label}</div></div></div>`).join('') : '<div class="empty">Nadie trabajando aquí en este momento</div>'}
     </div>
     ${botones}`;
   const on = (id, f) => { const el = document.getElementById(id); if (el) el.onclick = f; };
@@ -780,8 +801,8 @@ function hitZone(e) {
 }
 cv.addEventListener('mousemove', e => { hover = hitZone(e); cv.style.cursor = hover ? 'pointer' : 'default'; });
 cv.addEventListener('mouseleave', () => { hover = null; });
-cv.addEventListener('click', e => { if (busy) { saltar(); return; } const id = hitZone(e); if (id) select(id); });
-cv.addEventListener('dblclick', e => { const id = hitZone(e); if (id && modo !== 'libre') irA(id); });
+cv.addEventListener('click', e => { if (busy) { saltar(); return; } const id = hitZone(e); if (id === 'cierre') { avisar({ type: 'vista-cierre' }); return; } if (id) select(id); });
+cv.addEventListener('dblclick', e => { const id = hitZone(e); if (id && id !== 'cierre' && modo !== 'libre') irA(id); });
 
 /* ---------- Reloj ---------- */
 const clockEl = document.getElementById('clock');
@@ -799,6 +820,7 @@ window.addEventListener('message', e => {
   }
   if (!d || d.type !== 'vista-datos') return;
   for (const z of ZONES) if (d.zonas[z.id]) Object.assign(z, d.zonas[z.id]);
+  if (d.cierre) CIERRE = d.cierre;
   listo = true;
   renderList(); renderDetail(true);
 });

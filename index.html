@@ -132,7 +132,7 @@
     <div class="nav-section">
       <div class="nav-label">General</div>
       <div class="nav-item active" onclick="nav('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
-      <div class="nav-item" onclick="nav('checklist',this)"><i class="ti ti-clipboard-check"></i> Cierre de turno — Bacteriólogos</div>
+      <div class="nav-item" onclick="nav('checklist',this)"><i class="ti ti-clipboard-check"></i> Cierre de turno</div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Auxiliares — Recepción</div>
@@ -391,7 +391,7 @@
           <div class="panel">
             <div class="panel-header">
               <span class="panel-title">Muestras escaneadas en este turno</span>
-              <button class="btn btn-yellow" onclick="nav('cierre',null)"><i class="ti ti-lock"></i> Cerrar turno</button>
+              <button class="btn btn-yellow" onclick="irACierreArea('recepcion')"><i class="ti ti-lock"></i> Cerrar turno</button>
             </div>
             <table><thead><tr><th>Hora</th><th>Código</th><th>Paciente</th><th>Pruebas</th><th></th></tr></thead>
             <tbody id="rec-tabla"><tr><td colspan="4" class="empty-state">Escanea la primera muestra del turno...</td></tr></tbody></table>
@@ -795,8 +795,6 @@
           </div>
         </div>
 
-        </div>
-
         <!-- GENERAR CORREO -->
         <!-- REVISIÓN DE PENDIENTES (independiente) -->
         <div class="page" id="page-revision-manuales">
@@ -963,50 +961,23 @@
 
         <!-- CHECKLIST CIERRE DE TURNO -->
         <div class="page" id="page-checklist">
-          <div style="max-width:900px;height:calc(100vh - 120px);overflow-y:auto;padding-right:8px">
+          <div style="max-width:960px;height:calc(100vh - 120px);overflow-y:auto;padding-right:8px">
             <div class="panel" style="margin-bottom:14px">
               <div class="panel-header">
-                <span class="panel-title"><i class="ti ti-calendar"></i> Fecha del checklist</span>
+                <span class="panel-title"><i class="ti ti-calendar"></i> Cierre de turno</span>
                 <input type="date" id="cl-fecha" style="margin-left:12px" onchange="cambiarFechaChecklist()" />
-                <span style="font-size:11px;color:var(--text3);margin-left:12px">Un solo registro por día — cualquiera puede marcar su parte</span>
+                <span style="font-size:11px;color:var(--text3);margin-left:12px">Cada quien cierra su área, o una sola persona cierra todas</span>
+                <div id="cl-boton-cerrar-wrap" style="margin-left:auto"></div>
               </div>
-              <div style="padding:12px" id="cl-boton-cerrar-wrap"></div>
+              <div id="cl-estado-areas" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:12px 14px"></div>
+              <div id="cl-obs-general" style="padding:0 14px 14px"></div>
             </div>
-
-            <!-- EQUIPOS MAÑANA -->
-            <div class="panel" style="margin-bottom:14px">
-              <div class="panel-header"><span class="panel-title"><i class="ti ti-device-desktop"></i> Equipos — turno mañana</span></div>
-              <div id="cl-equipos-manana" style="padding:14px"></div>
-            </div>
-
-            <!-- EQUIPOS TARDE -->
-            <div class="panel" style="margin-bottom:14px">
-              <div class="panel-header"><span class="panel-title"><i class="ti ti-device-desktop"></i> Equipos — turno tarde</span></div>
-              <div id="cl-equipos-tarde" style="padding:14px"></div>
-            </div>
-
-            <!-- VALIDACIÓN -->
-            <div class="panel" style="margin-bottom:14px">
-              <div class="panel-header"><span class="panel-title"><i class="ti ti-checkbox"></i> Validación</span></div>
-              <div id="cl-validacion" style="padding:14px"></div>
-            </div>
-
-            <!-- PRUEBAS MANUALES -->
-            <div class="panel" style="margin-bottom:14px">
-              <div class="panel-header"><span class="panel-title"><i class="ti ti-flask-2"></i> Pruebas manuales</span></div>
-              <div id="cl-manuales" style="padding:14px"></div>
-            </div>
-
-            <!-- TUBERCULOSIS -->
-            <div class="panel" style="margin-bottom:14px">
-              <div class="panel-header"><span class="panel-title"><i class="ti ti-lungs"></i> Tuberculosis</span></div>
-              <div id="cl-tb" style="padding:14px"></div>
-            </div>
+            <div id="cl-areas"></div>
 
             <!-- HISTORIAL -->
             <div class="panel" style="margin-bottom:14px">
-              <div class="panel-header"><span class="panel-title"><i class="ti ti-history"></i> Historial de checklists</span></div>
-              <table><thead><tr><th>Fecha</th><th style="text-align:center">Completado</th><th>Estado</th></tr></thead>
+              <div class="panel-header"><span class="panel-title"><i class="ti ti-history"></i> Historial de cierres</span></div>
+              <table><thead><tr><th>Fecha</th><th style="text-align:center">Checklist</th><th>Áreas cerradas</th></tr></thead>
                 <tbody id="cl-historial"><tr><td colspan="3" class="empty-state">Cargando...</td></tr></tbody>
               </table>
             </div>
