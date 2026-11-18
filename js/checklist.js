@@ -128,10 +128,12 @@ async function cargarChecklist(fechaISO) {
     checklistActual = nuevo;
   }
   // Solo lectura si no es hoy, o si el día ya se cerró manualmente
-  checklistSoloLectura = (fechaISO !== hoy) || checklistActual.cerrado === true;
+  // Solo se edita el día de hoy; cada área se bloquea por separado cuando se cierra
+  checklistSoloLectura = fechaISO !== hoy;
 
   // Cargar info de mantenimiento semanal de manuales para esta semana
   await cargarSemanalManuales(fechaISO);
+  if (fechaISO === hoy) { try { await calcularPendientesCierre(); } catch (e) { console.error(e); } }
 
   renderChecklist(fechaISO);
   renderBotonCerrar();
@@ -147,56 +149,234 @@ async function cargarSemanalManuales(fechaISO) {
   });
 }
 
-function renderBotonCerrar() {
-  const hoy = hoyCO();
-  const esHoy = checklistActual.fecha === hoy;
-  const el = document.getElementById('cl-boton-cerrar-wrap');
-  if (!el) return;
-  if (checklistActual.cerrado) {
-    el.innerHTML = `<div style="padding:8px 12px;background:var(--bg2);border-radius:var(--radius);font-size:11px;color:var(--text3)">
-      <i class="ti ti-lock"></i> Checklist cerrado por <strong>${checklistActual.cerrado_por}</strong> el ${fmt(checklistActual.cerrado_fecha)} ${fmtHora(checklistActual.cerrado_fecha)} — ya no se puede modificar
-    </div>`;
-  } else if (esHoy) {
-    el.innerHTML = `<button class="btn btn-yellow" onclick="cerrarChecklistDia()"><i class="ti ti-lock"></i> Cerrar checklist de hoy (ya no se podrá editar)</button>`;
-  } else {
-    el.innerHTML = `<div style="padding:8px 12px;background:var(--bg2);border-radius:var(--radius);font-size:11px;color:var(--text3)"><i class="ti ti-eye"></i> Modo solo lectura — solo se puede editar el checklist del día actual</div>`;
-  }
+// ============================================================
+// CIERRE POR ÁREA
+// ============================================================
+// Cada área se cierra por separado (quien esté en ella), o una sola persona
+// cierra todas con "Cerrar las que faltan". Si un área no se cierra solo queda
+// marcada como "No se cerró": no bloquea nada. Al cerrar se guarda una foto de
+// los pendientes de esa área y sus novedades, que salen en la Entrega de turno.
+// Se guarda en checklist_turno.cierres_area (jsonb):
+//   { recepcion: {por, fecha, novedades, pendientes:[[etiqueta, valor, alerta]], conteo:{fisico, sistema, tb}}, ... }
+const AREAS_CIERRE = [
+  { id: 'recepcion',  nombre: 'Recepción',             icono: 'ti-scan' },
+  { id: 'equipos',    nombre: 'Equipos m2000',         icono: 'ti-device-desktop' },
+  { id: 'manuales',   nombre: 'Pruebas manuales',      icono: 'ti-flask-2' },
+  { id: 'tb',         nombre: 'Tuberculosis',          icono: 'ti-lungs' },
+  { id: 'validacion', nombre: 'Validación y descarte', icono: 'ti-checkbox' },
+];
+let clPendientes = {};   // área -> [[etiqueta, valor, alerta]] calculados ahora
+let clConteo = null;     // {sistema, tb} tubos escaneados hoy
+let clScrollA = null;    // área a la que hay que bajar al abrir la página
+const escCL = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function cierresDe(row) {
+  const c = { ...(row?.cierres_area || {}) };
+  // Días cerrados antes de existir el cierre por área: todas quedan cerradas por quien cerró el día
+  if (row?.cerrado && !AREAS_CIERRE.some(a => c[a.id]?.fecha))
+    AREAS_CIERRE.forEach(a => { c[a.id] = { ...(c[a.id] || {}), por: row.cerrado_por, fecha: row.cerrado_fecha, legado: true }; });
+  return c;
+}
+const areaCerrada = (row, id) => !!cierresDe(row)[id]?.fecha;
+const bloqCL = id => checklistSoloLectura || areaCerrada(checklistActual, id);
+
+async function calcularPendientesCierre() {
+  const M = allMuestras || [];
+  const corto = m => nombreCorto(m.estudio_nombre, m.estudio_codigo);
+  const tubos = arr => new Set(arr.map(m => m.nro_muestra)).size;
+  const manuales = typeof PRUEBAS_MANUALES_SANGRE !== 'undefined' ? PRUEBAS_MANUALES_SANGRE : new Set();
+  const hoy = hoyCO(), desde = hoy + 'T00:00:00-05:00', hasta = hoy + 'T23:59:59-05:00';
+  const head = { count: 'exact', head: true };
+  const contar = async q => { try { const { count, error } = await q; return error ? 0 : (count || 0); } catch (e) { return 0; } };
+  const [sinIng, recHoy, tbHoy] = await Promise.all([
+    contar(sb.from('recepciones').select('id', head).eq('sin_ingreso', true)),
+    contar(sb.from('recepciones').select('id', head).gte('fecha_recepcion', desde).lte('fecha_recepcion', hasta)),
+    contar(sb.from('recepciones').select('id', head).gte('fecha_recepcion', desde).lte('fecha_recepcion', hasta).eq('es_tb', true)),
+  ]);
+  clConteo = { sistema: recHoy - tbHoy, tb: tbHoy };
+  const esManual = m => manuales.has(corto(m));
+  const esTBm = m => corto(m) === 'TB';
+  const pend = M.filter(m => m.estado === 'pendiente' && !m.gestionada);
+  const rescate = typeof muestrasRescateHemato === 'function' ? tubos(muestrasRescateHemato().filter(m => !m.gestionada)) : 0;
+  const tb = typeof resumenOportunidadTB === 'function' ? resumenOportunidadTB() : { espera: [], vencidas: 0, porVencer: 0 };
+  const sv = M.filter(m => m.estado === 'sin-validar');
+  clPendientes = {
+    recepcion:  [['Pendientes por recibir', tubos(pend) + ' tubos', false], ['Sin ingreso', sinIng, sinIng > 0], ['Por rescatar de hematología', rescate, rescate > 0]],
+    equipos:    [['Reprocesos activos', M.filter(m => m.estado === 'reproceso' && !esManual(m) && !esTBm(m)).length, false], ['Sin validar', sv.filter(m => !esManual(m) && !esTBm(m)).length, false]],
+    manuales:   [['Recibidas sin validar', sv.filter(esManual).length, false], ['Remitidas sin resultado', M.filter(m => m.estado === 'remitida').length, false]],
+    tb:         [['Esperando resultado', tb.espera.length, false], ['Por vencer (36–48 h)', tb.porVencer, tb.porVencer > 0], ['Vencidas (más de 48 h)', tb.vencidas, tb.vencidas > 0]],
+    validacion: [['Sin validar (todas)', sv.length, false], ['Reprocesos y nuevas muestras', M.filter(m => m.estado === 'reproceso' || m.estado === 'nueva-muestra').length, false]],
+  };
 }
 
-async function cerrarChecklistDia() {
-  if (!confirm('¿Cerrar el checklist de hoy? Después de cerrarlo nadie podrá modificarlo.')) return;
-  const {error} = await sb.from('checklist_turno').update({
-    cerrado: true, cerrado_por: currentUser, cerrado_fecha: new Date().toISOString()
-  }).eq('id', checklistActual.id);
-  if (error) { toast('Error: ' + error.message, 'err'); return; }
-  checklistActual.cerrado = true;
-  checklistActual.cerrado_por = currentUser;
-  checklistActual.cerrado_fecha = new Date().toISOString();
-  checklistSoloLectura = true;
-  renderChecklist(checklistActual.fecha);
-  renderBotonCerrar();
-  toast('Checklist cerrado', 'ok');
+const chipsPendientes = pend => (pend || []).length
+  ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${pend.map(([l, v, al]) => `<span style="font-size:11px;padding:3px 9px;border-radius:10px;background:${al ? 'var(--yellow-bg)' : 'var(--bg2)'};color:${al ? 'var(--yellow)' : 'var(--text2)'}">${l}: <b>${v}</b></span>`).join('')}</div>` : '';
+
+// Cabecera: cómo va cada área + botón para que una sola persona cierre todo
+function renderBotonCerrar() {
+  const el = document.getElementById('cl-boton-cerrar-wrap');
+  if (!el || !checklistActual) return;
+  const esHoy = checklistActual.fecha === hoyCO();
+  const c = cierresDe(checklistActual);
+  const faltan = AREAS_CIERRE.filter(a => !c[a.id]?.fecha);
+  el.innerHTML = !esHoy ? `<span style="font-size:11px;color:var(--text3)"><i class="ti ti-eye"></i> Solo lectura</span>`
+    : faltan.length ? `<button class="btn btn-yellow" onclick="cerrarTodasLasAreas()"><i class="ti ti-lock"></i> Cerrar ${faltan.length === AREAS_CIERRE.length ? 'todas las áreas' : 'las ' + faltan.length + ' que faltan'}</button>`
+    : `<span class="pill s-val"><span class="dot"></span>Todas las áreas cerradas</span>`;
+  document.getElementById('cl-estado-areas').innerHTML = AREAS_CIERRE.map(a => {
+    const x = c[a.id], ok = !!x?.fecha;
+    return `<div onclick="irACierreArea('${a.id}')" style="cursor:pointer;padding:9px 10px;border-radius:var(--radius);border:0.5px solid ${ok ? 'var(--green-border)' : (esHoy ? 'var(--border2)' : 'var(--red-border)')};background:${ok ? 'var(--green-bg)' : (esHoy ? 'var(--bg2)' : 'var(--red-bg)')}">
+      <div style="font-size:11.5px;font-weight:600;display:flex;gap:5px;align-items:center;color:${ok ? 'var(--green)' : 'var(--text)'}"><i class="ti ${ok ? 'ti-lock' : a.icono}"></i> ${a.nombre}</div>
+      <div style="font-size:10.5px;color:${ok ? 'var(--green)' : (esHoy ? 'var(--text3)' : 'var(--red)')};margin-top:3px">${ok ? `${escCL((x.por || '—').split(' ')[0])}${x.fecha && !x.legado ? ' · ' + fmtHora(x.fecha) : ''}` : (esHoy ? 'Sin cerrar' : 'No se cerró')}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderConteoRecepcion(x) {
+  const cerrado = !!x?.fecha;
+  const sistema = cerrado && x.conteo ? x.conteo.sistema : clConteo?.sistema;
+  const tb = cerrado && x.conteo ? x.conteo.tb : clConteo?.tb;
+  const fisico = x?.conteo?.fisico ?? '';
+  return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:var(--bg2);border-radius:var(--radius)">
+    <div><div style="font-size:22px;font-weight:600;color:var(--accent)">${sistema ?? '…'}</div><div style="font-size:10px;color:var(--text2)">Tubos escaneados hoy</div></div>
+    <div><div style="font-size:22px;font-weight:600;color:#993C1D">${tb ?? '…'}</div><div style="font-size:10px;color:var(--text2)">TB (no cuentan)</div></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto"><span style="font-size:12px">Conteo físico de tubos:</span>
+      <input type="number" min="0" id="cl-conteo-fisico" value="${fisico}" ${bloqCL('recepcion') ? 'disabled' : ''} style="width:84px;text-align:center;font-size:18px;font-weight:600" oninput="mostrarCuadreCL(this.value)" /></div>
+    <div id="cl-conteo-res" style="width:100%;font-size:12px">${fisico !== '' && fisico !== null ? textoCuadreCL(+fisico, sistema) : ''}</div>
+  </div>`;
+}
+const textoCuadreCL = (f, s) => s == null || isNaN(f) ? '' : f === s
+  ? `<span style="color:var(--green)"><i class="ti ti-circle-check"></i> Cuadra: ${f} físico = ${s} sistema</span>`
+  : `<span style="color:var(--yellow)"><i class="ti ti-alert-triangle"></i> No cuadra: diferencia de <b>${Math.abs(f - s)}</b> tubo${Math.abs(f - s) !== 1 ? 's' : ''} ${f > s ? 'de más' : 'de menos'}</span>`;
+function mostrarCuadreCL(v) { const el = document.getElementById('cl-conteo-res'); if (el) el.innerHTML = v === '' ? '' : textoCuadreCL(parseInt(v), clConteo?.sistema); }
+
+function renderPanelArea(a, x, cuerpo) {
+  const ok = !!x?.fecha, esHoy = checklistActual.fecha === hoyCO();
+  const pend = ok ? (x.pendientes || []) : (esHoy ? clPendientes[a.id] : []);
+  const acciones = !esHoy ? '' : ok
+    ? `<span style="font-size:11px;color:var(--green)"><i class="ti ti-lock"></i> Cerrada por <b>${escCL(x.por || '—')}</b>${x.legado ? '' : ' · ' + fmtHora(x.fecha)}</span><button class="btn" style="font-size:11px;margin-left:8px" onclick="reabrirArea('${a.id}')">Reabrir</button>`
+    : `<button class="btn btn-primary" style="font-size:11.5px" onclick="cerrarArea('${a.id}')"><i class="ti ti-lock"></i> Cerrar ${a.nombre}</button>`;
+  const estadoPasado = esHoy ? '' : `<span style="font-size:11px;margin-left:8px;color:${ok ? 'var(--green)' : 'var(--red)'}">${ok ? 'Cerrada por ' + escCL(x.por || '—') + (x.legado ? '' : ' · ' + fmtHora(x.fecha)) : 'No se cerró'}</span>`;
+  return `<div class="panel" id="cl-area-${a.id}" style="margin-bottom:14px;${ok ? 'border-color:var(--green-border)' : ''}">
+    <div class="panel-header"><span class="panel-title"><i class="ti ${a.icono}"></i> ${a.nombre}</span>${estadoPasado}
+      <div style="margin-left:auto;display:flex;align-items:center">${acciones}</div></div>
+    <div style="padding:12px 14px">
+      ${pend && pend.length ? `<div style="font-size:10.5px;font-weight:600;color:var(--text3);margin-bottom:5px">${ok ? 'PENDIENTES AL CERRAR' : 'PENDIENTES AHORA (los calcula el gestor)'}</div>${chipsPendientes(pend)}<div style="height:10px"></div>` : ''}
+      ${cuerpo}
+      <div style="margin-top:10px">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px"><i class="ti ti-notes"></i> Novedades del área para el siguiente turno</div>
+        <textarea rows="2" style="width:100%;font-size:12px;padding:6px" placeholder="Ej: quedó pendiente…, el equipo presentó…" ${bloqCL(a.id) ? 'disabled' : ''} onblur="guardarNovedadArea('${a.id}', this.value)">${escCL(x?.novedades || '')}</textarea>
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderChecklist(fechaISO) {
   const { equiposManana, equiposTarde, validacion, manuales, tb } = getItemsChecklist(fechaISO);
-  document.getElementById('cl-equipos-manana').innerHTML = renderBloqueItems(equiposManana);
-  document.getElementById('cl-equipos-tarde').innerHTML = renderBloqueItems(equiposTarde) + renderObsEntregaTarde();
-  document.getElementById('cl-validacion').innerHTML = renderBloqueItems(validacion);
-  document.getElementById('cl-manuales').innerHTML = renderBloqueItems(manuales);
+  const tbHay = checklistActual?.items?.tb_hay_montaje?.checked || false;
+  const tbVis = tb.filter(it => it.esToggleMaestro || (it.requiereMontaje && tbHay));
+  const c = cierresDe(checklistActual);
+  const sub = t => `<div style="font-size:10.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:6px 0 0">${t}</div>`;
+  const cuerpo = {
+    recepcion:  renderConteoRecepcion(c.recepcion),
+    equipos:    sub('Turno mañana') + renderBloqueItems(equiposManana, bloqCL('equipos')) + sub('Turno tarde') + renderBloqueItems(equiposTarde, bloqCL('equipos')),
+    manuales:   renderBloqueItems(manuales, bloqCL('manuales')),
+    tb:         renderBloqueItems(tbVis, bloqCL('tb')),
+    validacion: renderBloqueItems(validacion, bloqCL('validacion')),
+  };
+  document.getElementById('cl-areas').innerHTML = AREAS_CIERRE.map(a => renderPanelArea(a, c[a.id], cuerpo[a.id])).join('');
+  document.getElementById('cl-obs-general').innerHTML = renderObsEntregaTarde();
+  renderBotonCerrar();
+  if (clScrollA) {
+    const el = document.getElementById('cl-area-' + clScrollA), cont = document.querySelector('#page-checklist > div');
+    clScrollA = null;
+    if (el && cont) cont.scrollTo({ top: cont.scrollTop + el.getBoundingClientRect().top - cont.getBoundingClientRect().top - 4, behavior: 'smooth' });
+  }
+}
 
-  const tbHayMontaje = checklistActual?.items?.tb_hay_montaje?.checked || false;
-  const tbItemsVisibles = tb.filter(it => it.esToggleMaestro || (it.requiereMontaje && tbHayMontaje));
-  document.getElementById('cl-tb').innerHTML = renderBloqueItems(tbItemsVisibles);
+// Lee el cierre más reciente de la base, aplica el cambio y lo guarda (así dos
+// personas cerrando áreas distintas al mismo tiempo no se pisan)
+async function guardarCierresArea(fn) {
+  const { data: fresco, error: e0 } = await sb.from('checklist_turno').select('cierres_area').eq('id', checklistActual.id).maybeSingle();
+  if (e0) { toast('Falta preparar la base para el cierre por áreas (correr cierre_por_area.sql): ' + e0.message, 'err'); return false; }
+  const c = { ...(fresco?.cierres_area || {}) };
+  fn(c);
+  const todas = AREAS_CIERRE.every(a => c[a.id]?.fecha);
+  const upd = { cierres_area: c, cerrado: todas, updated_at: new Date().toISOString() };
+  if (todas && !checklistActual.cerrado) { upd.cerrado_por = currentUser; upd.cerrado_fecha = new Date().toISOString(); }
+  const { error } = await sb.from('checklist_turno').update(upd).eq('id', checklistActual.id);
+  if (error) { toast('No se pudo guardar el cierre: ' + error.message, 'err'); return false; }
+  Object.assign(checklistActual, upd);
+  return true;
+}
+
+async function cerrarArea(id, enLote) {
+  if (checklistSoloLectura) return false;
+  const a = AREAS_CIERRE.find(x => x.id === id);
+  let conteo = null;
+  if (id === 'recepcion') {
+    const v = document.getElementById('cl-conteo-fisico')?.value;
+    const fisico = v === '' || v == null ? null : parseInt(v);
+    if (fisico === null && !confirm('No escribiste el conteo físico de tubos. ¿Cerrar Recepción sin conteo?')) return false;
+    conteo = { fisico, sistema: clConteo?.sistema ?? null, tb: clConteo?.tb ?? null };
+  } else if (!enLote && !confirm(`¿Cerrar ${a.nombre}?`)) return false;
+  try { await calcularPendientesCierre(); } catch (e) { console.error(e); }
+  const nov = document.querySelector(`#cl-area-${id} textarea`)?.value ?? '';
+  const ok = await guardarCierresArea(c => {
+    c[id] = { ...(c[id] || {}), por: currentUser, fecha: new Date().toISOString(), novedades: nov, pendientes: clPendientes[id] || [], ...(conteo ? { conteo } : {}) };
+  });
+  if (!ok) return false;
+  // El conteo físico sigue quedando también en el historial de cierres de recepción
+  if (conteo && conteo.fisico !== null) {
+    const { error } = await sb.from('cierres_turno').insert({
+      cerrado_por: currentUser, fecha_cierre: checklistActual.fecha,
+      total_escaneadas: conteo.sistema, conteo_cervix: conteo.fisico, conteo_plasma: 0, conteo_sangre: 0, conteo_otros: 0,
+      observaciones: (nov ? nov + ' | ' : '') + (conteo.fisico === conteo.sistema ? 'Conteo OK' : `No cuadra: físico=${conteo.fisico} sistema=${conteo.sistema}`),
+    });
+    if (error) console.error('cierres_turno:', error);
+  }
+  if (!enLote) { renderChecklist(checklistActual.fecha); toast(`${a.nombre} cerrada`, 'ok'); }
+  return true;
+}
+
+async function cerrarTodasLasAreas() {
+  const faltan = AREAS_CIERRE.filter(a => !areaCerrada(checklistActual, a.id));
+  if (!faltan.length || checklistSoloLectura) return;
+  if (!confirm(`Vas a cerrar a tu nombre: ${faltan.map(a => a.nombre).join(', ')}. ¿Seguir?`)) return;
+  let n = 0;
+  for (const a of faltan) { if (!(await cerrarArea(a.id, true))) break; n++; }
+  renderChecklist(checklistActual.fecha);
+  if (n) toast(`${n} área${n > 1 ? 's' : ''} cerrada${n > 1 ? 's' : ''}`, 'ok');
+}
+
+async function reabrirArea(id) {
+  if (checklistSoloLectura) return;
+  const a = AREAS_CIERRE.find(x => x.id === id);
+  if (!confirm(`¿Reabrir ${a.nombre}? Quedará otra vez sin cerrar.`)) return;
+  const ok = await guardarCierresArea(c => { c[id] = { novedades: c[id]?.novedades || '' }; });
+  if (ok) { await calcularPendientesCierre().catch(() => {}); renderChecklist(checklistActual.fecha); toast(`${a.nombre} reabierta`, 'info'); }
+}
+
+async function guardarNovedadArea(id, valor) {
+  if (bloqCL(id)) return;
+  const actual = (checklistActual.cierres_area || {})[id]?.novedades || '';
+  if (valor === actual) return;
+  await guardarCierresArea(c => { c[id] = { ...(c[id] || {}), novedades: valor }; });
+}
+
+// Llevar a la persona directo al cierre de un área (botón "Cerrar turno" de recepción, plano del laboratorio)
+function irACierreArea(id) {
+  clScrollA = id;
+  if (document.getElementById('page-checklist').classList.contains('active') && checklistActual) { renderChecklist(checklistActual.fecha); return; }
+  nav('checklist', document.querySelector(".sidebar [onclick*=\"nav('checklist'\"]"));
 }
 
 function renderObsEntregaTarde() {
   const obs = checklistActual?.obs_entrega_tarde || '';
-  return `<div style="margin-top:10px;padding:10px;background:var(--yellow-bg);border:0.5px solid var(--yellow-border);border-radius:var(--radius)">
-    <div style="font-size:11px;font-weight:600;color:var(--yellow);margin-bottom:4px"><i class="ti ti-notes"></i> Observaciones para quien abra el turno de mañana</div>
-    <textarea rows="2" placeholder="Ej: el equipo X presentó falla, quedó pendiente..."
-      style="width:100%;font-size:12px;padding:6px" ${checklistSoloLectura?'disabled':''}
-      onblur="actualizarObsEntregaTarde(this.value)">${obs}</textarea>
+  return `<div style="padding:10px;background:var(--yellow-bg);border:0.5px solid var(--yellow-border);border-radius:var(--radius)">
+    <div style="font-size:11px;font-weight:600;color:var(--yellow);margin-bottom:4px"><i class="ti ti-notes"></i> Observaciones generales para quien abra el siguiente turno</div>
+    <textarea rows="2" placeholder="Algo que deba saber todo el laboratorio mañana..."
+      style="width:100%;font-size:12px;padding:6px" ${checklistSoloLectura ? 'disabled' : ''}
+      onblur="actualizarObsEntregaTarde(this.value)">${escCL(obs)}</textarea>
   </div>`;
 }
 
@@ -205,7 +385,7 @@ async function actualizarObsEntregaTarde(valor) {
   checklistActual.obs_entrega_tarde = valor;
 }
 
-function renderBloqueItems(items) {
+function renderBloqueItems(items, bloqueado = checklistSoloLectura) {
   const data = checklistActual?.items || {};
   return items.map(item => {
     const it = data[item.key] || {};
@@ -213,7 +393,7 @@ function renderBloqueItems(items) {
     const por = it.por || null;
     const fechaMarcado = it.fecha_marcado || null;
     const obs = it.observacion || '';
-    const disabled = checklistSoloLectura ? 'disabled' : '';
+    const disabled = bloqueado ? 'disabled' : '';
 
     // Ítem semanal: si ya se hizo esta semana en otro día distinto al actual, mostrar como informativo
     if (item.semanal && semanalManualesInfo && semanalManualesInfo.dia !== checklistActual.fecha) {
@@ -311,17 +491,22 @@ async function actualizarHorasValidacion(prefijo, tipo, valor) {
 }
 
 async function cargarHistorialChecklist() {
-  const {data} = await sb.from('checklist_turno').select('fecha,items,cerrado').order('fecha',{ascending:false}).limit(30);
+  let { data, error } = await sb.from('checklist_turno').select('fecha,items,cerrado,cerrado_por,cerrado_fecha,cierres_area').order('fecha', { ascending: false }).limit(30);
+  if (error) ({ data } = await sb.from('checklist_turno').select('fecha,items,cerrado,cerrado_por,cerrado_fecha').order('fecha', { ascending: false }).limit(30));
   const el = document.getElementById('cl-historial');
   if (!el) return;
-  if (!data || !data.length) { el.innerHTML = '<div class="empty-state">Sin historial</div>'; return; }
+  if (!data || !data.length) { el.innerHTML = '<tr><td colspan="3" class="empty-state">Sin historial</td></tr>'; return; }
   el.innerHTML = data.map(row => {
-    const total = Object.keys(row.items||{}).length;
-    const marcados = Object.values(row.items||{}).filter(i => i?.checked).length;
+    const total = Object.keys(row.items || {}).length;
+    const marcados = Object.values(row.items || {}).filter(i => i?.checked).length;
+    const c = cierresDe(row);
+    const n = AREAS_CIERRE.filter(a => c[a.id]?.fecha).length;
+    const faltan = AREAS_CIERRE.filter(a => !c[a.id]?.fecha).map(a => a.nombre);
+    const pillCls = n === AREAS_CIERRE.length ? 's-val' : (n ? 's-rec' : 's-pend');
     return `<tr onclick="document.getElementById('cl-fecha').value='${row.fecha}';cambiarFechaChecklist()" style="cursor:pointer">
       <td class="mono">${fmt(row.fecha)}</td>
       <td style="text-align:center">${marcados}/${total}</td>
-      <td>${row.cerrado ? '<span class="pill s-val"><span class="dot"></span>Cerrado</span>' : '<span class="pill s-rec"><span class="dot"></span>Abierto</span>'}</td>
+      <td><span class="pill ${pillCls}"><span class="dot"></span>${n}/${AREAS_CIERRE.length}</span>${faltan.length && faltan.length < AREAS_CIERRE.length ? ` <span style="font-size:10.5px;color:var(--text3)">sin cerrar: ${faltan.join(', ')}</span>` : ''}</td>
     </tr>`;
   }).join('');
 }
@@ -329,49 +514,54 @@ async function cargarHistorialChecklist() {
 // ============================================================
 // MODAL ENTREGA DE TURNO — se muestra al abrir el gestor por primera vez en el día
 // ============================================================
+// Trae el último día con registro (el viernes o sábado si hoy es lunes) y muestra
+// área por área quién cerró, las novedades y los pendientes que quedaron.
 async function verificarEntregaTurno() {
   const hoy = hoyCO();
   const key = 'entregaShown_' + hoy;
-  if (localStorage.getItem(key)) return;
+  try { if (localStorage.getItem(key)) return; } catch (e) {}
+  const { data: filas } = await sb.from('checklist_turno').select('*').lt('fecha', hoy).order('fecha', { ascending: false }).limit(1);
+  const ant = filas && filas[0];
+  const c = ant ? cierresDe(ant) : {};
+  const obs = ant?.obs_entrega_tarde || '';
+  const nCerr = AREAS_CIERRE.filter(a => c[a.id]?.fecha).length;
 
-  // Buscar checklist de ayer para traer sus observaciones
-  const ayer = new Date(); ayer.setDate(ayer.getDate() - 1);
-  const ayerISO = ayer.toISOString().slice(0,10);
-  const {data: ayerData} = await sb.from('checklist_turno').select('*').eq('fecha', ayerISO).maybeSingle();
-
-  const obsAyer = ayerData?.obs_entrega_tarde || '';
-  const totalAyer = ayerData ? Object.keys(ayerData.items||{}).length : 0;
-  const marcadosAyer = ayerData ? Object.values(ayerData.items||{}).filter(i=>i?.checked).length : 0;
+  const filasArea = AREAS_CIERRE.map(a => {
+    const x = c[a.id] || {}, ok = !!x.fecha;
+    const conteo = a.id === 'recepcion' && x.conteo && x.conteo.fisico != null
+      ? `<div style="font-size:11px;margin-top:3px;color:${x.conteo.fisico === x.conteo.sistema ? 'var(--green)' : 'var(--yellow)'}">Conteo físico ${x.conteo.fisico} · sistema ${x.conteo.sistema ?? '—'}${x.conteo.fisico === x.conteo.sistema ? ' · cuadra' : ' · no cuadró'}</div>` : '';
+    return `<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <i class="ti ${a.icono}" style="color:var(--text2)"></i><b style="font-size:12.5px">${a.nombre}</b>
+        <span style="margin-left:auto;font-size:11px;color:${ok ? 'var(--green)' : 'var(--red)'}">${ok ? `<i class="ti ti-lock"></i> ${escCL(x.por || '—')}${x.legado ? '' : ' · ' + fmtHora(x.fecha)}` : '<i class="ti ti-alert-circle"></i> No se cerró'}</span>
+      </div>
+      ${x.novedades ? `<div style="font-size:12.5px;margin:6px 0 0 22px;padding:6px 9px;background:var(--yellow-bg);border-radius:var(--radius);color:var(--text)">${escCL(x.novedades)}</div>` : ''}
+      ${x.pendientes && x.pendientes.length ? `<div style="margin:6px 0 0 22px">${chipsPendientes(x.pendientes)}</div>` : ''}
+      ${conteo ? `<div style="margin-left:22px">${conteo}</div>` : ''}
+    </div>`;
+  }).join('');
 
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   modal.innerHTML = `
-    <div style="background:var(--surface);border-radius:var(--radius-lg);max-width:560px;width:100%;padding:24px;max-height:90vh;overflow-y:auto">
+    <div style="background:var(--surface);border-radius:var(--radius-lg);max-width:620px;width:100%;padding:22px 24px;max-height:90vh;overflow-y:auto">
       <div style="font-size:18px;font-weight:600;margin-bottom:4px"><i class="ti ti-clipboard-check"></i> Entrega de turno</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Resumen de ayer (${fmt(ayerISO)}) antes de empezar hoy</div>
-
-      ${obsAyer ? `<div style="padding:12px;background:var(--yellow-bg);border:0.5px solid var(--yellow-border);border-radius:var(--radius);margin-bottom:14px">
-        <div style="font-size:12px;font-weight:600;color:var(--yellow);margin-bottom:6px"><i class="ti ti-alert-triangle"></i> Observaciones de ayer en la tarde</div>
-        <div style="font-size:13px;color:var(--text)">${obsAyer}</div>
-      </div>` : `<div style="padding:10px;background:var(--green-bg);border-radius:var(--radius);font-size:12px;color:var(--green);margin-bottom:14px"><i class="ti ti-circle-check"></i> Sin observaciones pendientes de ayer</div>`}
-
-      <div style="font-size:12px;color:var(--text2);margin-bottom:16px">
-        Checklist de ayer completado: <strong>${marcadosAyer}/${totalAyer}</strong> ítems
-        ${ayerData?.cerrado ? ' · <span style="color:var(--green)">Cerrado</span>' : ' · <span style="color:var(--yellow)">No se cerró</span>'}
-      </div>
-
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-primary" style="flex:1" onclick="cerrarModalEntrega(true)"><i class="ti ti-clipboard-check"></i> Ir al checklist de hoy</button>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${ant ? `Último turno: ${fmt(ant.fecha)} · ${nCerr} de ${AREAS_CIERRE.length} áreas cerradas` : 'No hay cierre registrado del turno anterior'}</div>
+      ${obs ? `<div style="padding:10px 12px;background:var(--yellow-bg);border:0.5px solid var(--yellow-border);border-radius:var(--radius);margin-bottom:6px">
+        <div style="font-size:11.5px;font-weight:600;color:var(--yellow);margin-bottom:4px"><i class="ti ti-alert-triangle"></i> Observaciones generales</div>
+        <div style="font-size:13px;color:var(--text)">${escCL(obs)}</div></div>` : ''}
+      ${ant ? filasArea : ''}
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" style="flex:1" onclick="cerrarModalEntrega(true)"><i class="ti ti-clipboard-check"></i> Ir al cierre de turno de hoy</button>
         <button class="btn" onclick="cerrarModalEntrega(false)">Cerrar</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
   window._modalEntrega = modal;
-  localStorage.setItem(key, '1');
+  try { localStorage.setItem(key, '1'); } catch (e) {}
 }
 
 function cerrarModalEntrega(irAChecklist) {
   if (window._modalEntrega) { window._modalEntrega.remove(); window._modalEntrega = null; }
-  if (irAChecklist) nav('checklist', document.querySelector('[onclick*="checklist"]'));
+  if (irAChecklist) nav('checklist', document.querySelector(".sidebar [onclick*=\"nav('checklist'\"]"));
 }
-

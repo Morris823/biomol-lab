@@ -1,0 +1,839 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vista del laboratorio</title>
+<script>document.documentElement.setAttribute("data-theme","light")</script>
+<style>
+/* Layout: plano isométrico del laboratorio a la izquierda, panel de zonas a la derecha (se apila en celular).
+   Colores tomados del gestor BioMol Lab para que la vista se pueda integrar sin choques. */
+:root{
+  --bg:#F7F7F5; --surface:#FFFFFF; --bg2:#EFEFED; --border:#E0DED8; --border2:#CECDCA;
+  --text:#1A1A18; --text2:#5F5E5A; --text3:#9B9A96;
+  --accent:#1A56DB; --accent-bg:#EBF1FD;
+  --green:#3B6D11; --green-bg:#EAF3DE;
+  --yellow:#854F0B; --yellow-bg:#FAEEDA;
+  --red:#A32D2D; --red-bg:#FCEBEB;
+  --purple:#3C3489; --purple-bg:#EEEDFE;
+  --teal:#0F6E56; --teal-bg:#E1F5EE;
+  --scene:#F2F1EC; --floor:#E9E7E0; --wall:#DDDAD1; --wall2:#D1CEC4;
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono','Fira Code',ui-monospace,monospace;
+  --radius:8px; --radius-lg:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141413; --surface:#1D1D1B; --bg2:#262624; --border:#33322E; --border2:#45443F;
+    --text:#EDECE8; --text2:#ADACA6; --text3:#77766F;
+    --accent:#7AA2FF; --accent-bg:#1C2741;
+    --green:#94C964; --green-bg:#1E2A15;
+    --yellow:#E8B25C; --yellow-bg:#33280F;
+    --red:#F08C8C; --red-bg:#3A1C1C;
+    --purple:#B4AEF6; --purple-bg:#25233F;
+    --teal:#62CDB1; --teal-bg:#122F29;
+    --scene:#181816; --floor:#2B2A27; --wall:#3A3934; --wall2:#32312D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141413; --surface:#1D1D1B; --bg2:#262624; --border:#33322E; --border2:#45443F;
+  --text:#EDECE8; --text2:#ADACA6; --text3:#77766F;
+  --accent:#7AA2FF; --accent-bg:#1C2741;
+  --green:#94C964; --green-bg:#1E2A15;
+  --yellow:#E8B25C; --yellow-bg:#33280F;
+  --red:#F08C8C; --red-bg:#3A1C1C;
+  --purple:#B4AEF6; --purple-bg:#25233F;
+  --teal:#62CDB1; --teal-bg:#122F29;
+  --scene:#181816; --floor:#2B2A27; --wall:#3A3934; --wall2:#32312D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;margin:0}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 28px;padding-inline:16px;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:16px;align-items:start}
+@media (max-width:920px){.wrap{grid-template-columns:minmax(0,1fr)}}
+
+.head{grid-column:1/-1;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.head h1{font-size:18px;font-weight:600;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.head .sub{font-size:12px;color:var(--text2);margin-top:3px}
+.head-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chip{font-size:11px;font-weight:500;padding:3px 9px;border-radius:999px;border:1px solid var(--border2);color:var(--text2);background:var(--surface);white-space:nowrap}
+.chip.sample{border-style:dashed}
+.clock{font-family:var(--mono);font-size:12px;color:var(--text2);font-variant-numeric:tabular-nums}
+
+.stage{position:relative;background:var(--scene);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;min-width:0}
+.stage canvas{display:block;width:100%;height:auto;touch-action:manipulation}
+.stage-foot{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text3);padding:0 14px 12px}
+.stage-foot span{display:inline-flex;align-items:center;gap:5px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.dot.ok{background:var(--green)} .dot.warn{background:var(--yellow)} .dot.crit{background:var(--red)} .dot.info{background:var(--accent)}
+
+.panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg)}
+.card-h{padding:12px 14px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em}
+.zlist{display:flex;flex-direction:column;padding:0 6px 6px}
+.zrow{all:unset;box-sizing:border-box;display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px 8px;border-radius:var(--radius);cursor:pointer}
+.zrow:hover{background:var(--bg2)}
+.zrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.zrow.sel{background:var(--accent-bg)}
+.zrow .zn{font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.zrow .zv{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text2);font-variant-numeric:tabular-nums}
+
+.detail{padding:14px}
+.detail h2{font-size:15px;font-weight:600;margin:0 0 2px}
+.detail .sect{font-size:11px;color:var(--text3)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;margin-top:8px}
+.pill.ok{background:var(--green-bg);color:var(--green)} .pill.warn{background:var(--yellow-bg);color:var(--yellow)}
+.pill.crit{background:var(--red-bg);color:var(--red)} .pill.info{background:var(--accent-bg);color:var(--accent)}
+.metrics{margin:12px 0 0;padding:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 12px}
+.metrics dt{color:var(--text2);font-size:12px}
+.metrics dd{margin:0;font-family:var(--mono);font-size:12px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.people{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.people .lbl{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.person{display:flex;align-items:center;gap:9px;padding:4px 0}
+.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:600;color:#fff;flex:none}
+.person .pn{font-size:12px;font-weight:500}
+.person .pa{font-size:11px;color:var(--text2)}
+.empty{font-size:12px;color:var(--text3);font-style:italic}
+.go{margin-top:14px;width:100%;padding:9px 12px;border-radius:var(--radius);border:none;background:var(--text);color:var(--surface);font:500 13px var(--font);cursor:pointer}
+.go:hover{opacity:.88}
+.go:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{font-size:11.5px;line-height:1.5;color:var(--text2);padding:12px 14px}
+.note b{color:var(--text);font-weight:600}
+.go:disabled{opacity:.45;cursor:default}
+.go2{margin-top:8px;width:100%;padding:8px 12px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--surface);color:var(--text2);font:500 12.5px var(--font);cursor:pointer}
+.go2:hover{background:var(--bg2);color:var(--text)}
+.link{all:unset;display:block;margin-top:10px;font-size:11.5px;color:var(--text3);text-align:center;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.link:hover{color:var(--text2)}
+.secs{margin:12px 0 0;padding:10px 0 0;border-top:1px solid var(--border);list-style:none;display:flex;flex-direction:column;gap:5px}
+.secs .lbl{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}
+.secs li{font-size:12px;color:var(--text2);display:flex;gap:7px;align-items:center}
+.secs li::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--accent);flex:none}
+.here{display:inline-block;font-size:10px;font-weight:600;color:var(--accent);background:var(--accent-bg);border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:2px}
+.stage canvas{margin:0 auto}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--surface);font-size:12.5px;padding:9px 14px;border-radius:var(--radius);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:calc(100% - 32px);text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <h1 id="titulo">Laboratorio de Biología Molecular</h1>
+      <div class="sub" id="subtitulo">Haz clic en una zona del plano para ver qué está pasando ahí.</div>
+    </div>
+    <div class="head-right">
+      <span class="clock" id="clock">—</span>
+    </div>
+  </header>
+
+  <section class="stage" id="stage" aria-label="Plano isométrico del laboratorio">
+    <canvas id="cv" role="img" aria-label="Plano del laboratorio con zonas de recepción, extracción, amplificación, tuberculosis, validación y neveras, y personas trabajando en cada una"></canvas>
+    <div class="stage-foot">
+      <span><i class="dot ok"></i>Al día</span>
+      <span><i class="dot warn"></i>Acumulado</span>
+      <span><i class="dot crit"></i>Vencido</span>
+      <span><i class="dot info"></i>Por validar</span>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="card">
+      <div class="card-h">Zonas</div>
+      <div class="zlist" id="zlist"></div>
+    </div>
+    <div class="card detail" id="detail"></div>
+    <div class="card note">
+      <b>Cómo funciona.</b> Al entrar eliges el área donde te toca hoy y el gestor te muestra solo las secciones de esa área. Para pasarte a otra, usa <b>Cambiar de área</b> y tu personaje camina hasta allá. Las cifras de cada zona salen de los datos del gestor.</div>
+  </aside>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+/* ---------- Geometría isométrica ---------- */
+const W = 18, D = 14;           // tamaño del piso en baldosas
+const TW = 56, TH = 28, ZU = 26; // ancho/alto de baldosa y unidad de altura en px
+const WALL = 3.4;
+const MARGIN = 24;
+const OX = MARGIN + D * TW / 2;
+const OY = 118;
+const LW = (W + D) * TW / 2 + MARGIN * 2;
+const LH = OY + (W + D) * TH / 2 + 46;
+
+const P = (i, j, z = 0) => ({ x: OX + (i - j) * TW / 2, y: OY + (i + j) * TH / 2 - z * ZU });
+const unproject = (x, y) => { const a = (x - OX) / (TW / 2), b = (y - OY) / (TH / 2); return { i: (a + b) / 2, j: (b - a) / 2 }; };
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const stage = document.getElementById('stage');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- Colores del tema ---------- */
+let T = {}, DARK = false;
+function readTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  ['bg','surface','border','border2','text','text2','text3','accent','accent-bg','green','green-bg','yellow','yellow-bg','red','red-bg','purple','purple-bg','teal','teal-bg','scene','floor','wall','wall2']
+    .forEach(k => T[k] = cs.getPropertyValue('--' + k).trim());
+  const c = hex(T.bg); DARK = (c[0] * .299 + c[1] * .587 + c[2] * .114) < 110;
+}
+function hex(h) { if (h.startsWith('rgb')) return h.match(/[\d.]+/g).slice(0, 3).map(Number); h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function rgb(a) { return `rgb(${a.map(v => Math.round(Math.max(0, Math.min(255, v)))).join(',')})`; }
+function mix(a, b, t) { const A = hex(a), B = hex(b); return rgb(A.map((v, k) => v + (B[k] - v) * t)); }
+function shade(h, f) { const A = hex(h); return rgb(A.map(v => f < 0 ? v * (1 + f) : v + (255 - v) * f)); }
+function toHex(c) { if (c[0] === '#') return c; const m = c.match(/\d+/g).map(Number); return '#' + m.slice(0, 3).map(v => v.toString(16).padStart(2, '0')).join(''); }
+// Objetos del laboratorio: un poco más apagados en modo oscuro para que no deslumbren
+const obj = h => DARK ? toHex(shade(h, -0.22)) : h;
+
+/* ---------- Zonas (datos de ejemplo) ---------- */
+const ZONES = [
+  { id: 'recepcion', name: 'Recepción', seccion: 'Recepción', a: [12, 6, 18, 14], tint: 'yellow', st: 'warn', pin: '427', cap: 'por recibir', pz: 2.2, at: [16.6, 7.0],
+    metrics: [['Escaneadas hoy', '182'], ['Pendientes por recibir', '427'], ['Sin ingreso', '6']] },
+  { id: 'extraccion', name: 'Extracción · m2000sp', seccion: 'Matrículas', a: [0, 0, 6, 6], tint: 'accent', st: 'ok', pin: '72/96', cap: 'matrícula #48', pz: 3.3, at: [1.8, 1.0],
+    metrics: [['Matrícula en montaje', '#48 · VPH'], ['Posiciones ocupadas', '72 de 96'], ['Montadas hoy', '2']] },
+  { id: 'amplificacion', name: 'Amplificación · m2000rt', seccion: 'Matrículas', a: [6, 0, 12, 6], tint: 'teal', st: 'ok', pin: '38 min', cap: 'para terminar', pz: 3.2,
+    metrics: [['Corrida actual', 'VIH carga viral'], ['Termina', '5:48 p. m.'], ['Reprocesos activos', '12']] },
+  { id: 'tb', name: 'Tuberculosis', seccion: 'Corridas TB', a: [12, 0, 18, 6], tint: 'green', st: 'crit', pin: '2', cap: 'con más de 3 días', pz: 4.0,
+    metrics: [['Esperando corrida', '9'], ['Más de 3 días hábiles', '2'], ['Última corrida', 'lun. 5 oct.']] },
+  { id: 'validacion', name: 'Validación', seccion: 'Todas las muestras', a: [0, 6, 6, 14], tint: 'purple', st: 'info', pin: '86', cap: 'sin validar', pz: 3.3, at: [0.4, 6.4],
+    metrics: [['Sin validar', '86'], ['Validadas hoy', '214'], ['Oportunidad VPH', '1,1 días háb.']] },
+  { id: 'descarte', name: 'Neveras y descarte', seccion: 'Descarte', a: [6, 6, 12, 14], tint: 'red', st: 'ok', pin: '4', cap: 'gradillas a descarte', pz: 3.8,
+    metrics: [['Gradillas para descartar', '4'], ['Muestras en nevera', '312'], ['Último descarte', 'vie. 2 oct.']] },
+];
+// Mientras el gestor carga, las cifras quedan en espera
+ZONES.forEach(z => { z.pin = '…'; z.cap = 'cargando'; z.metrics = []; z.secciones = []; z.st = 'ok'; });
+// Caminos de cada zona: desde el pasillo (j = 5,2) hasta el puesto de trabajo, esquivando muebles
+const RUTAS = {
+  recepcion:     [[12.5, 5.2], [12.5, 10.5], [15.2, 10.6]],
+  extraccion:    [[3.0, 5.2], [3.0, 4.2]],
+  amplificacion: [[9.0, 5.2], [9.0, 3.8]],
+  tb:            [[14.8, 5.2], [14.8, 3.8]],
+  validacion:    [[4.0, 5.2], [4.0, 10.0]],
+  descarte:      [[10.5, 5.2], [10.5, 9.6]],
+};
+const PUERTA = [18.8, 5.2];
+let CIERRE = null;   // {cerradas, total} — la puerta es el cierre de turno
+const spotOf = id => RUTAS[id][RUTAS[id].length - 1];
+const zoneAt = (i, j) => ZONES.find(z => i >= z.a[0] && i < z.a[2] && j >= z.a[1] && j < z.a[3]) || null;
+const stColor = s => ({ ok: T.green, warn: T.yellow, crit: T.red, info: T.accent })[s];
+
+/* ---------- Muebles y equipos ---------- */
+const boxes = [];
+function B(i, j, z, w, d, h, c, extra = {}) { const b = { i, j, z, w, d, h, c, ...extra }; b.depth = b.depth ?? (i + w / 2 + j + d / 2); boxes.push(b); return b; }
+function on(parent, b, k = 1) { b.depth = parent.depth + 0.02 * k; return b; }
+
+// Recepción
+const counter = B(13, 8.2, 0, 4.2, 1, 1.35, '#EFE9DD', { top: '#F7F3EA' });
+on(counter, B(14.15, 8.45, 1.35, .45, .45, .22, '#3A3D44', { led: '#E5484D' }), 1);
+on(counter, B(15.2, 8.35, 1.35, .9, .7, .32, '#F3E9C9', { tubes: '#E0A93B' }), 2);
+const side = B(17, 9.3, 0, .9, 3.4, 1.35, '#EFE9DD', { top: '#F7F3EA' });
+on(side, B(17.1, 9.5, 1.35, .7, .9, .32, '#F3E9C9', { tubes: '#E0A93B' }), 1);
+on(side, B(17.1, 10.7, 1.35, .7, .9, .32, '#F3E9C9', { tubes: '#C8507A' }), 2);
+on(side, B(17.1, 11.9, 1.35, .7, .7, .32, '#F3E9C9', { tubes: '#3F8FD4' }), 3);
+// Cajas de muestras por recibir (la pila crece con los pendientes)
+const crates = [];
+[[13.1, 12.5, 3], [14.15, 12.55, 2], [13.15, 11.4, 1]].forEach(([i, j, n]) => {
+  let base = null;
+  for (let k = 0; k < n; k++) { const b = B(i, j, k * .5, .9, .9, .48, '#C9A577', { crate: true }); if (base) on(base, b, k); else base = b; crates.push(b); }
+});
+// Extracción
+B(0.7, 0.6, 0, 3, 1.6, 2.5, '#E8EBEE', { sp: true });
+const bench = B(4.4, 0.6, 0, 1.4, 3.2, 1.35, '#E4E7EA', { top: '#F2F4F6' });
+on(bench, B(4.65, 1.0, 1.35, .9, .6, .14, '#FFFFFF', { plate: true }), 1);
+on(bench, B(4.7, 2.3, 1.35, .7, .9, .32, '#F3E9C9', { tubes: '#E0A93B' }), 2);
+// Amplificación
+const rtBench = B(6.6, 0.5, 0, 5, 1.8, 1.1, '#E4E7EA', { top: '#F2F4F6' });
+on(rtBench, B(6.9, 0.75, 1.1, 1.7, 1.3, 1.0, '#E3E6EA', { rt: true }), 1);
+on(rtBench, B(9.3, 0.75, 1.1, 1.7, 1.3, 1.0, '#E3E6EA', { rt: true }), 2);
+on(rtBench, B(11.25, 0.8, 1.1, .12, .9, .65, '#2D3036', { screen: true }), 3);
+// Tuberculosis
+const cabBase = B(13.2, 0.6, 0, 3.2, 1.5, 1.2, '#E6E9EC');
+on(cabBase, B(13.2, 0.6, 1.2, 3.2, 1.5, 1.9, '#EEF1F3', { hood: true }), 1);
+const cent = B(16.9, 1.1, 0, .9, .9, 1.0, '#DDE1E5', { centri: true });
+B(17.05, 3.6, 0, .6, .6, .8, '#C24B3E', { bin: true });
+// Validación
+const desk1 = B(0.5, 7.3, 0, 1.4, 2.4, 1.2, '#D9CBB4', { top: '#E6DAC6' });
+on(desk1, B(0.75, 7.75, 1.2, .12, 1.0, .7, '#2D3036', { screen: true, typing: 'Mateo' }), 1);
+B(2.15, 8.15, 0, .65, .7, .6, '#5B6573', { chair: true });
+const desk2 = B(0.5, 11.0, 0, 1.4, 2.2, 1.2, '#D9CBB4', { top: '#E6DAC6' });
+on(desk2, B(0.75, 11.6, 1.2, .12, 1.0, .7, '#2D3036', { screen: true, typing: 'Mateo2' }), 1);
+B(2.15, 11.75, 0, .65, .7, .6, '#5B6573', { chair: true });
+B(0.35, 13.2, 0, .5, .5, .45, '#B07A52', { plant: true });
+B(5.25, 6.35, 0, .5, .5, .45, '#B07A52', { plant: true });
+// Neveras y descarte
+B(7.0, 6.6, 0, 1.25, 1.1, 3.0, '#EDF0F3', { fridge: true });
+B(8.45, 6.6, 0, 1.25, 1.1, 3.0, '#EDF0F3', { fridge: true });
+const dBench = B(7.2, 11.3, 0, 2.3, 1, 1.15, '#E4E7EA', { top: '#F2F4F6' });
+for (let k = 0; k < 4; k++) on(dBench, B(7.35 + k * .55, 11.45, 1.15, .45, .7, .28, '#F3E9C9', { tubes: '#9B9A96' }), k + 1);
+B(10.3, 12.7, 0, .7, .7, .85, '#C24B3E', { bin: true });
+B(11.1, 12.7, 0, .7, .7, .85, '#D9A53A', { bin: true });
+
+/* ---------- Personas (datos de ejemplo) ---------- */
+// match: palabras que deben estar en el nombre del usuario del gestor para reconocerlo
+const PEOPLE = [
+  { name: 'Gloria', full: 'Gloria Ramírez', match: ['gloria'], role: 'Auxiliar', color: '#0F6E56', coat: '#3FA58A', hair: '#3B2A20', style: 'bun', skin: '#E8B996',
+    plan: [
+      { to: [14.35, 9.9], wait: 6, face: [14.35, 8.6], act: 'scan', label: 'Escaneando muestras' },
+      { to: [15.9, 9.9], wait: 5, face: [15.6, 8.6], act: 'scan', label: 'Escaneando muestras' },
+      { to: [16.3, 11.0], wait: 3, face: [17.5, 11.0], label: 'Ordenando gradillas' },
+      { to: [14.7, 11.7], wait: 3, face: [13.6, 12.9], label: 'Revisando cajas por recibir' },
+      { to: [12.6, 7.2], wait: 3, face: [14, 8.6], via: [[12.6, 10.5]], label: 'Huyéndole a Orioncito' },
+      { to: [15.2, 10.6], wait: 4, face: [15.2, 8.6], via: [[12.6, 10.5]], act: 'scan', label: 'Escaneando muestras' },
+    ] },
+  { name: 'Laura P.', full: 'Laura Pertuz', match: ['laura', 'pertuz'], role: 'Auxiliar', color: '#B4452A', coat: '#3FA58A', hair: '#C2412B', style: 'long', skin: '#F0C9A8',
+    plan: [
+      { to: [13.9, 10.9], wait: 4, face: [13.6, 12.9], label: 'Sacando muestras de las cajas' },
+      { to: [6.4, 2.6], wait: 5, face: [5.2, 2.6], carry: true, via: [[12.5, 10.5], [12.5, 5.2]], label: 'Entregando gradilla en extracción' },
+      { to: [7.7, 3.3], wait: 3, face: [7.7, 1.5], label: 'Revisando el m2000rt' },
+      { to: [13.9, 10.9], wait: 3, face: [13.6, 12.9], via: [[12.5, 5.2], [12.5, 10.5]], label: 'Volviendo a recepción' },
+    ] },
+  { name: 'Laura A.', full: 'Laura Álvarez', match: ['laura', 'alvarez'], role: 'Bacterióloga', color: '#A8811F', coat: '#F7F8FA', hair: '#E7C66A', style: 'long', skin: '#F1CDB0',
+    plan: [
+      { to: [2.47, 12.1], wait: 12, face: [1, 12.1], sit: true, act: 'type', label: 'Validando carga viral de VIH' },
+      { to: [14.8, 3.8], wait: 6, face: [14.8, 1.8], via: [[4.0, 10.0], [4.0, 5.2], [14.8, 5.2]], label: 'Revisando la corrida de TB' },
+      { to: [2.47, 12.1], wait: 10, face: [1, 12.1], sit: true, act: 'type', via: [[14.8, 5.2], [4.0, 5.2], [4.0, 10.0]], label: 'Validando TB' },
+    ] },
+  { name: 'Samanta', full: 'Samanta', match: ['samanta'], role: 'Bacterióloga', color: '#3C3489', coat: '#F7F8FA', hair: '#1E1A18', style: 'pony', skin: '#C98F6B',
+    plan: [
+      { to: [2.3, 3.1], wait: 7, face: [2.3, 1.8], act: 'led', label: 'Cargando el m2000sp' },
+      { to: [5.1, 4.5], wait: 5, face: [5.1, 3.2], label: 'Revisando reprocesos del m2000sp' },
+      { to: [8.0, 3.2], wait: 4, face: [8.0, 1.6], label: 'Montando matrícula de HLA-B27' },
+      { to: [10.3, 3.2], wait: 4, face: [10.3, 1.6], via: [[6.5, 5.0]], label: 'Revisando corrida en m2000rt' },
+    ] },
+  { name: 'Mateo', full: 'Mateo Morales', match: ['mateo'], role: 'Bacteriólogo', color: '#1A56DB', coat: '#F7F8FA', hair: '#2A211C', style: 'short', skin: '#E2AE88',
+    plan: [
+      { to: [2.47, 8.5], wait: 14, face: [1, 8.5], sit: true, act: 'type', label: 'Validando resultados de VPH' },
+      { to: [4.3, 10.2], wait: 3, face: [5.3, 13.0], label: 'Estirando las piernas' },
+      { to: [2.47, 8.5], wait: 9, face: [1, 8.5], sit: true, act: 'type', label: 'Importando validados' },
+    ] },
+];
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const esPersona = (p, nombre) => { const n = norm(nombre); return p.match.every(w => n.includes(w)); };
+PEOPLE.forEach((p, k) => {
+  p.seed = k * 1.7; p.k = 0;
+  const s = p.plan[0]; p.i = s.to[0]; p.j = s.to[1]; p.route = []; p.moving = false;
+  p.wait = reduce ? Infinity : 1 + k * 1.3; arrive(p, s);
+});
+const AMBIENTE = PEOPLE.slice();
+
+/* ---------- Tu personaje ---------- */
+const ME = { isMe: true, name: 'Tú', tag: 'Tú', role: '', color: '#B4236A', coat: '#F7F8FA', hair: '#2A211C', style: 'short', skin: '#D9A07C',
+  seed: 9.1, i: PUERTA[0], j: PUERTA[1], route: [], moving: false, sit: false, act: null, carry: false, back: true, flip: -1, plan: [], match: [] };
+let usuarioActual = null;
+function configurarUsuario(nombre, rol) {
+  if (!nombre || nombre === usuarioActual) return;
+  usuarioActual = nombre;
+  const primero = nombre.split(' ')[0];
+  const igual = AMBIENTE.find(p => esPersona(p, nombre));
+  PEOPLE.length = 0; AMBIENTE.filter(p => p !== igual).forEach(p => PEOPLE.push(p));
+  const aux = /aux/i.test(rol || '');
+  if (igual) Object.assign(ME, { color: igual.color, coat: igual.coat, hair: igual.hair, style: igual.style, skin: igual.skin, match: igual.match });
+  else Object.assign(ME, { color: '#B4236A', coat: aux ? '#3FA58A' : '#F7F8FA', hair: '#2A211C', style: 'short', skin: '#D9A07C', match: [] });
+  ME.tag = 'Tú · ' + (igual ? igual.name : primero);
+  ME.role = igual ? igual.role : (aux ? 'Auxiliar' : 'Bacteriólogo/a');
+  reiniciarPug();
+}
+function ponerEn(id) {
+  const s = id ? spotOf(id) : PUERTA;
+  ME.i = s[0]; ME.j = s[1]; ME.route = []; ME.moving = false;
+  if (id) { const [i0, j0, i1, j1] = ZONES.find(z => z.id === id).a; setFacing(ME, (i0 + i1) / 2 - ME.i, (j0 + j1) / 2 - ME.j); }
+  else setFacing(ME, -1, 0);
+}
+function arrive(p, s) { p.sit = !!s.sit; p.act = s.act || null; p.label = s.label; p.carry = false; setFacing(p, s.face[0] - p.i, s.face[1] - p.j); }
+function setFacing(p, di, dj) { const dx = (di - dj), dy = (di + dj); p.back = dy < -0.01; p.flip = dx >= 0 ? 1 : -1; }
+
+/* ---------- Orioncito, el pug de Gloria ----------
+   Sigue a Gloria por el mismo camino que ella recorre (migas de pan), así no
+   atraviesa muebles. Si Gloria es quien entra al gestor, persigue a "Tú". */
+const PUG = { name: 'Orioncito', role: 'Pug', isPug: true, i: 15.4, j: 11.2, trail: [], moving: false, sit: true, back: false, flip: 1, seed: 4.2, last: null, label: 'Persiguiendo a Gloria' };
+const PUG_LAG = 9;   // migas de distancia (~0,7 baldosas detrás)
+function objetivoPug() {
+  if (ME.match && ME.match.includes('gloria') && modo !== 'libre') return ME;
+  return PEOPLE.find(p => p.match.includes('gloria')) || null;
+}
+function reiniciarPug() {
+  const g = objetivoPug(); PUG.trail = []; PUG.last = null;
+  if (g) { PUG.i = g.i + .7; PUG.j = g.j + .5; }
+}
+function updatePug(dt) {
+  const g = objetivoPug(); if (!g) return;
+  const salto = PUG.last ? Math.hypot(g.i - PUG.last[0], g.j - PUG.last[1]) : 0;
+  if (salto > 1.5) { PUG.trail = []; PUG.i = g.i + .6; PUG.j = g.j + .5; }   // Gloria apareció en otro lado
+  PUG.last = [g.i, g.j];
+  const ult = PUG.trail[PUG.trail.length - 1];
+  if (!ult || Math.hypot(g.i - ult[0], g.j - ult[1]) > .08) PUG.trail.push([g.i, g.j]);
+  if (PUG.trail.length > 400) PUG.trail.splice(0, PUG.trail.length - 400);
+  if (PUG.trail.length > PUG_LAG) {
+    const [ti, tj] = PUG.trail[0], di = ti - PUG.i, dj = tj - PUG.j, dist = Math.hypot(di, dj);
+    const step = (PUG.trail.length > PUG_LAG + 12 ? 6.5 : 2.3) * dt;   // si se queda atrás, corre
+    PUG.moving = true; PUG.sit = false; setFacing(PUG, di, dj);
+    if (dist <= step) { PUG.i = ti; PUG.j = tj; PUG.trail.shift(); }
+    else { PUG.i += di / dist * step; PUG.j += dj / dist * step; }
+    PUG.label = 'Persiguiendo a ' + (g.isMe ? 'ti' : 'Gloria');
+  } else {
+    PUG.moving = false; PUG.sit = true; setFacing(PUG, g.i - PUG.i, g.j - PUG.j);
+    PUG.label = 'Sentado mirando a ' + (g.isMe ? 'ti' : 'Gloria');
+  }
+}
+function drawPug(d, t) {
+  const F = P(d.i, d.j, 0), x = F.x, fl = d.flip, ph = t * 16 + d.seed;
+  const run = d.moving && !reduce;
+  const y = F.y - (run ? Math.abs(Math.sin(ph)) * 1.8 : 0);
+  const fawn = '#9A6A3E', mask = '#2A1A10', K = 1.3;   // marrón   // un poco más grande que a escala real, para que se vea
+  ctx.save(); ctx.translate(x, F.y); ctx.scale(K, K); ctx.translate(-x, -F.y);
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x, F.y, 7.5, 3.2, 0, 0, 7); ctx.fill();
+  // cola enroscada (atrás)
+  const tx = x - fl * (d.sit ? 4.5 : 6.6), ty = y - (d.sit ? 5.5 : 9.5), wag = reduce ? 0 : Math.sin(t * (run ? 18 : 9)) * .7;
+  ctx.strokeStyle = shade(fawn, -.12); ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(tx, ty, 2.3, wag, Math.PI * 1.65 + wag); ctx.stroke(); ctx.lineWidth = 1;
+  // patas
+  ctx.fillStyle = shade(fawn, -.18);
+  if (!d.sit) {
+    const s = run ? Math.sin(ph) * 1.7 : 0;
+    [[-5, s], [-2.2, -s], [2, s], [4.6, -s]].forEach(([dx, o]) => ctx.fillRect(x + dx * fl - .9, y - 4.5, 1.9, 4.5 - Math.max(0, o)));
+  } else { ctx.fillRect(x + fl * 1.2 - .9, y - 4, 1.9, 4); ctx.fillRect(x + fl * 3.2 - .9, y - 4, 1.9, 4); }
+  // cuerpo
+  ctx.fillStyle = fawn; ctx.beginPath();
+  if (d.sit) ctx.ellipse(x - fl * .5, y - 6.2, 5.2, 5.6, 0, 0, 7); else ctx.ellipse(x, y - 7, 7.2, 4.4, 0, 0, 7);
+  ctx.fill();
+  // cabeza
+  const hx = x + fl * (d.sit ? 2.6 : 6.2), hy = y - (d.sit ? 12.8 : 11);
+  ctx.fillStyle = fawn; ctx.beginPath(); ctx.arc(hx, hy, 4.6, 0, 7); ctx.fill();
+  ctx.fillStyle = mask; ctx.beginPath(); ctx.ellipse(hx - 3.6, hy - 3.1, 1.6, 2.3, -.5, 0, 7); ctx.ellipse(hx + 3.6, hy - 3.1, 1.6, 2.3, .5, 0, 7); ctx.fill();
+  if (!d.back) {
+    ctx.fillStyle = mask; ctx.beginPath(); ctx.ellipse(hx + fl * 1.5, hy + 1.5, 2.8, 2.1, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(hx - 1.6 + fl * 1.1, hy - 1.1, 1, 0, 7); ctx.arc(hx + 1.6 + fl * 1.1, hy - 1.1, 1, 0, 7); ctx.fill();
+    if (run) { ctx.fillStyle = '#E5737F'; ctx.fillRect(hx + fl * 1.5 - .8, hy + 3, 1.6, 2); }
+  }
+  ctx.restore();
+  const topY = F.y - (F.y - hy) * K;
+  labels.push(() => {
+    ctx.font = '600 9px Inter, system-ui, sans-serif';
+    const tw = ctx.measureText(d.name).width + 10, ny = topY - 20;
+    rr(x - tw / 2, ny, tw, 12, 6); ctx.fillStyle = T.surface; ctx.fill(); ctx.strokeStyle = '#9A6A3E'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = T.text2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(d.name, x, ny + 6.3);
+  });
+}
+
+/* ---------- Estado de interacción ---------- */
+let selected = 'recepcion', hover = null, pinRects = [];
+let modo = 'libre';      // 'entrada' (recién entra al gestor) · 'cambio' (se pasa de área) · 'libre' (vista suelta)
+let actual = null;       // área donde está la persona
+let busy = false;        // tu personaje va caminando
+let listo = false;       // el gestor ya mandó las cifras
+const enIframe = window.parent !== window;
+const avisar = msg => { if (enIframe) window.parent.postMessage(msg, '*'); };
+const labels = [];
+
+/* ---------- Dibujo ---------- */
+function poly(pts, fill, stroke) { ctx.beginPath(); pts.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); } }
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+
+function drawFloor() {
+  for (let i = 0; i < W; i++) for (let j = 0; j < D; j++) {
+    const z = zoneAt(i + .5, j + .5);
+    let c = z ? mix(T.floor, T[z.tint + '-bg'], DARK ? .55 : .75) : T.floor;
+    if ((i + j) % 2) c = shade(toHex(c), DARK ? .025 : -.018);
+    if (z && hover === z.id) c = shade(toHex(c), DARK ? .06 : .35);
+    poly([P(i, j), P(i + 1, j), P(i + 1, j + 1), P(i, j + 1)], c);
+  }
+  // borde inferior del piso (grosor)
+  const th = .35;
+  poly([P(W, 0), P(W, D), P(W, D, -th), P(W, 0, -th)], shade(toHex(T.wall2), -.08));
+  poly([P(0, D), P(W, D), P(W, D, -th), P(0, D, -th)], shade(toHex(T.wall2), -.16));
+  // contornos de zonas
+  ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+  ZONES.forEach(z => { const [i0, j0, i1, j1] = z.a; poly([P(i0, j0), P(i1, j0), P(i1, j1), P(i0, j1)], null, mix(T.floor, T.text3, .45)); });
+  ctx.setLineDash([]);
+  const s = ZONES.find(z => z.id === selected);
+  if (s) { const [i0, j0, i1, j1] = s.a; ctx.lineWidth = 2.5; poly([P(i0 + .06, j0 + .06), P(i1 - .06, j0 + .06), P(i1 - .06, j1 - .06), P(i0 + .06, j1 - .06)], null, T.accent); ctx.lineWidth = 1; }
+}
+
+function drawWalls() {
+  // pared del fondo derecho (plano j=0) y pared del fondo izquierdo (plano i=0)
+  const w1 = T.wall, w2 = T.wall2, t = .25;
+  poly([P(0, 0), P(W, 0), P(W, 0, WALL), P(0, 0, WALL)], w1);
+  poly([P(0, 0), P(0, D), P(0, D, WALL), P(0, 0, WALL)], w2);
+  // canto superior
+  poly([P(-t, -t, WALL), P(W, -t, WALL), P(W, 0, WALL), P(0, 0, WALL), P(0, D, WALL), P(-t, D, WALL)], shade(toHex(w1), DARK ? .08 : .25));
+  poly([P(W, -t, WALL), P(W, 0, WALL), P(W, 0, 0), P(W, -t, 0)], shade(toHex(w1), -.1));
+  poly([P(-t, D, WALL), P(0, D, WALL), P(0, D, 0), P(-t, D, 0)], shade(toHex(w2), -.12));
+  // zócalo
+  poly([P(0, 0), P(W, 0), P(W, 0, .18), P(0, 0, .18)], shade(toHex(w1), -.07));
+  poly([P(0, 0), P(0, D), P(0, D, .18), P(0, 0, .18)], shade(toHex(w2), -.07));
+  // ventanas en la pared derecha
+  const sky = DARK ? '#1F2C3D' : '#CFE2F3', frame = shade(toHex(w1), -.12);
+  [[6.9, 8.9], [9.3, 11.3]].forEach(([a, b]) => {
+    poly([P(a, 0, 2.25), P(b, 0, 2.25), P(b, 0, 3.05), P(a, 0, 3.05)], frame);
+    poly([P(a + .08, 0, 2.31), P(b - .08, 0, 2.31), P(b - .08, 0, 2.99), P(a + .08, 0, 2.99)], sky);
+    poly([P((a + b) / 2 - .03, 0, 2.31), P((a + b) / 2 + .03, 0, 2.31), P((a + b) / 2 + .03, 0, 2.99), P((a + b) / 2 - .03, 0, 2.99)], frame);
+  });
+  // tablero en la pared izquierda (validación)
+  poly([P(0, 7.2, 1.9), P(0, 10.6, 1.9), P(0, 10.6, 3.0), P(0, 7.2, 3.0)], shade(toHex(w2), -.15));
+  poly([P(0, 7.3, 1.98), P(0, 10.5, 1.98), P(0, 10.5, 2.92), P(0, 7.3, 2.92)], DARK ? '#2E3330' : '#F4F6F2');
+  [['#E0A93B', 7.6, 2.55], ['#3F8FD4', 8.4, 2.2], ['#C8507A', 9.3, 2.6], ['#7DB14A', 9.9, 2.25]].forEach(([c, j, z]) =>
+    poly([P(0, j, z), P(0, j + .45, z), P(0, j + .45, z + .32), P(0, j, z + .32)], obj(c)));
+  // reloj (hora real) en la pared derecha
+  drawWallClock(14.6, 2.55);
+}
+
+function drawWallClock(i, z) {
+  const c = P(i, 0, z); const now = new Date();
+  ctx.save(); ctx.translate(c.x, c.y); ctx.transform(1, .5, 0, 1, 0, 0); // plano j=0
+  ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fillStyle = DARK ? '#2A2D31' : '#FFFFFF'; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = DARK ? '#55585E' : '#3A3D44'; ctx.stroke();
+  const hA = ((now.getHours() % 12) + now.getMinutes() / 60) / 12 * Math.PI * 2, mA = now.getMinutes() / 60 * Math.PI * 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.sin(hA) * 6, -Math.cos(hA) * 6); ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.sin(mA) * 9, -Math.cos(mA) * 9); ctx.lineWidth = 1.3; ctx.stroke();
+  ctx.restore();
+}
+
+function faceJ(b, u0, u1, v0, v1, fill) { const jj = b.j + b.d; poly([P(b.i + u0, jj, b.z + v0), P(b.i + u1, jj, b.z + v0), P(b.i + u1, jj, b.z + v1), P(b.i + u0, jj, b.z + v1)], fill); }
+function faceI(b, u0, u1, v0, v1, fill) { const ii = b.i + b.w; poly([P(ii, b.j + u0, b.z + v0), P(ii, b.j + u1, b.z + v0), P(ii, b.j + u1, b.z + v1), P(ii, b.j + u0, b.z + v1)], fill); }
+
+function drawBox(b, t) {
+  const { i, j, z, w, d, h } = b, base = obj(b.c);
+  const top = b.top ? obj(b.top) : shade(base, .18);
+  const fI = shade(base, -.07), fJ = shade(base, -.17);
+  // sombra suave sobre el piso
+  if (z === 0) poly([P(i + .12, j + d), P(i + w + .12, j + d), P(i + w + .12, j + d + .16), P(i + .12, j + d + .16)], 'rgba(0,0,0,.07)');
+  poly([P(i + w, j, z), P(i + w, j + d, z), P(i + w, j + d, z + h), P(i + w, j, z + h)], fI);
+  poly([P(i, j + d, z), P(i + w, j + d, z), P(i + w, j + d, z + h), P(i, j + d, z + h)], fJ);
+  poly([P(i, j, z + h), P(i + w, j, z + h), P(i + w, j + d, z + h), P(i, j + d, z + h)], top);
+  ctx.lineWidth = .6; poly([P(i, j + d, z + h), P(i + w, j + d, z + h), P(i + w, j, z + h)], null, 'rgba(0,0,0,.08)'); ctx.lineWidth = 1;
+  decorate(b, t);
+}
+
+function decorate(b, t) {
+  const blink = reduce ? 1 : (Math.sin(t * 3 + b.i) > 0 ? 1 : .35);
+  if (b.led) { const p = P(b.i + b.w / 2, b.j + b.d / 2, b.z + b.h + .02); ctx.fillStyle = b.led; ctx.globalAlpha = blink; ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
+  if (b.tubes) { // gradilla con tapas de colores
+    const nx = Math.max(2, Math.round(b.w / .2)), ny = Math.max(2, Math.round(b.d / .2));
+    for (let a = 0; a < nx; a++) for (let c = 0; c < ny; c++) {
+      const p = P(b.i + (a + .5) * b.w / nx, b.j + (c + .5) * b.d / ny, b.z + b.h);
+      ctx.fillStyle = obj(b.tubes); ctx.beginPath(); ctx.ellipse(p.x, p.y, 2.4, 1.3, 0, 0, 7); ctx.fill();
+    }
+  }
+  if (b.plate) { for (let a = 0; a < 8; a++) for (let c = 0; c < 5; c++) { const p = P(b.i + (a + .5) * b.w / 8, b.j + (c + .5) * b.d / 5, b.z + b.h); ctx.fillStyle = (a * 5 + c) < 29 ? obj('#E0A93B') : 'rgba(0,0,0,.12)'; ctx.fillRect(p.x - .9, p.y - .6, 1.8, 1.2); } }
+  if (b.crate) { faceJ(b, .3, .6, .3, .4, 'rgba(0,0,0,.18)'); faceI(b, .3, .6, .3, .4, 'rgba(0,0,0,.14)'); }
+  if (b.sp) { // m2000sp: ventana de cristal y franja azul
+    faceJ(b, .2, 2.8, .25, .45, obj('#1A56DB'));
+    faceJ(b, .3, 2.7, .7, 2.1, DARK ? '#22313F' : '#BFD3E3');
+    faceJ(b, .35, 1.2, 1.2, 2.0, 'rgba(255,255,255,.28)');
+    const p = P(b.i + 2.55, b.j + b.d, b.z + 2.3); ctx.fillStyle = '#3BB273'; ctx.globalAlpha = blink; ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+  }
+  if (b.rt) { // m2000rt: tapa oscura y luz verde
+    const tp = [P(b.i + .15, b.j + .15, b.z + b.h + .01), P(b.i + b.w - .15, b.j + .15, b.z + b.h + .01), P(b.i + b.w - .15, b.j + b.d - .15, b.z + b.h + .01), P(b.i + .15, b.j + b.d - .15, b.z + b.h + .01)];
+    poly(tp, obj('#3A3D44'));
+    faceJ(b, .2, .6, .55, .75, '#3BB273');
+    faceJ(b, .9, 1.5, .3, .42, 'rgba(0,0,0,.2)');
+  }
+  if (b.screen) { // pantalla mirando hacia +i
+    const lit = b.typing && !reduce ? .75 + .25 * Math.sin(t * 9 + b.j) : .9;
+    faceI(b, .06, b.d - .06, .1, b.h - .06, DARK ? `rgba(90,140,220,${lit * .7})` : `rgba(170,205,245,${lit})`);
+    if (b.typing) for (let k = 0; k < 3; k++) faceI(b, .15, .15 + .5 * ((k * 37 % 10) / 10 + .3), .45 - k * .1, .5 - k * .1, 'rgba(26,86,219,.45)');
+  }
+  if (b.hood) { // cabina de bioseguridad: vidrio frontal y luz
+    faceJ(b, .15, b.w - .15, .1, 1.25, DARK ? 'rgba(120,170,220,.25)' : 'rgba(160,200,235,.55)');
+    faceJ(b, .15, b.w - .15, 1.45, 1.7, obj('#CFD6DD'));
+    faceJ(b, .3, b.w - .3, 1.18, 1.25, DARK ? '#C9D8A0' : '#F4F9DC');
+    faceJ(b, b.w - .7, b.w - .35, 1.5, 1.65, '#E5484D');
+  }
+  if (b.centri) { const p = P(b.i + b.w / 2, b.j + b.d / 2, b.z + b.h); ctx.fillStyle = obj('#B8C0C8'); ctx.beginPath(); ctx.ellipse(p.x, p.y, 13, 6.5, 0, 0, 7); ctx.fill(); }
+  if (b.bin) { poly([P(b.i - .03, b.j - .03, b.z + b.h), P(b.i + b.w + .03, b.j - .03, b.z + b.h), P(b.i + b.w + .03, b.j + b.d + .03, b.z + b.h), P(b.i - .03, b.j + b.d + .03, b.z + b.h)], shade(obj(b.c), -.25)); faceJ(b, .2, .5, .35, .55, 'rgba(255,255,255,.75)'); }
+  if (b.fridge) { faceJ(b, .08, b.w - .08, 1.75, 1.8, 'rgba(0,0,0,.15)'); faceJ(b, b.w - .25, b.w - .18, 1.95, 2.6, obj('#9BA3AB')); faceJ(b, b.w - .25, b.w - .18, .9, 1.55, obj('#9BA3AB')); faceJ(b, .2, .65, 2.65, 2.85, DARK ? '#2D4A3A' : '#3A6E52'); }
+  if (b.plant) { const p = P(b.i + b.w / 2, b.j + b.d / 2, b.z + b.h + .55); const g = obj('#4F8A3C');
+    [[0, 0, 13], [-7, 4, 9], [7, 4, 9], [0, -7, 9]].forEach(([dx, dy, r], k) => { ctx.fillStyle = k ? shade(g, .12) : g; ctx.beginPath(); ctx.arc(p.x + dx, p.y + dy, r, 0, 7); ctx.fill(); }); }
+}
+
+/* ---------- Personas ---------- */
+function drawPerson(p, t) {
+  const F = P(p.i, p.j, 0); const x = F.x;
+  const ph = t * 10 + p.seed;
+  const walking = p.moving;
+  let y = F.y - (p.sit ? .62 * ZU : 0);
+  y -= walking ? Math.abs(Math.sin(ph)) * 1.6 : (reduce ? 0 : Math.sin(t * 2 + p.seed) * .5);
+  const fl = p.flip, back = p.back;
+  const pants = '#3E4654', shoe = '#24262B';
+  // sombra
+  ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(x, F.y, 10, 4.5, 0, 0, 7); ctx.fill();
+  // piernas
+  if (!p.sit) {
+    const s = walking ? Math.sin(ph) * 2.4 : 0;
+    ctx.fillStyle = pants; ctx.fillRect(x - 4.6, y - 13, 3.6, 13 - Math.max(0, s)); ctx.fillRect(x + 1, y - 13, 3.6, 13 - Math.max(0, -s));
+    ctx.fillStyle = shoe; ctx.fillRect(x - 5, y - 2 - Math.max(0, s), 4.4, 2.2); ctx.fillRect(x + .8, y - 2 - Math.max(0, -s), 4.4, 2.2);
+  } else {
+    ctx.fillStyle = pants; rr(x - 5, y - 12, 10, 5, 2); ctx.fill();
+  }
+  // carga: gradilla (detrás si está de espaldas)
+  const rack = () => { ctx.fillStyle = '#F3E9C9'; rr(x - 7, y - 23, 14, 6, 1.5); ctx.fill(); ctx.fillStyle = '#E0A93B'; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(x - 4.8 + k * 3.2, y - 23, 1.3, 0, 7); ctx.fill(); } };
+  if (p.carry && back) rack();
+  // pelo largo por detrás
+  const hy = y - 35;
+  if (p.style === 'long' && !back) { ctx.fillStyle = p.hair; rr(x - 7.5, hy - 2, 15, 15, 5); ctx.fill(); }
+  // cuerpo / bata
+  ctx.fillStyle = p.coat; rr(x - 7.2, y - 28, 14.4, 16, 4.5); ctx.fill();
+  if (p.coat === '#F7F8FA') { ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = .8; ctx.stroke(); }
+  if (!back) { ctx.fillStyle = p.coat === '#F7F8FA' ? p.color : shade(p.coat, -.2); ctx.beginPath(); ctx.moveTo(x - 3, y - 28); ctx.lineTo(x + 3, y - 28); ctx.lineTo(x, y - 23.5); ctx.closePath(); ctx.fill(); }
+  // brazos
+  const sw = walking && !p.carry ? Math.sin(ph) * 2 : 0;
+  ctx.fillStyle = shade(p.coat, -.06);
+  if (p.carry && !back) { rack(); ctx.fillStyle = p.skin; ctx.beginPath(); ctx.arc(x - 6.5, y - 20, 1.8, 0, 7); ctx.arc(x + 6.5, y - 20, 1.8, 0, 7); ctx.fill(); }
+  else {
+    rr(x - 9.2, y - 26 + sw, 2.6, 11, 1.3); ctx.fill(); rr(x + 6.6, y - 26 - sw, 2.6, 11, 1.3); ctx.fill();
+    ctx.fillStyle = p.skin; ctx.beginPath(); ctx.arc(x - 7.9, y - 14.5 + sw, 1.6, 0, 7); ctx.arc(x + 7.9, y - 14.5 - sw, 1.6, 0, 7); ctx.fill();
+  }
+  // cabeza
+  ctx.fillStyle = p.skin; ctx.beginPath(); ctx.arc(x, hy, 7, 0, 7); ctx.fill();
+  ctx.fillStyle = p.hair;
+  if (back) {
+    ctx.beginPath(); ctx.arc(x, hy - .5, 7.4, 0, 7); ctx.fill();
+    if (p.style === 'long') { rr(x - 7.4, hy, 14.8, 13, 5); ctx.fill(); }
+  } else {
+    ctx.beginPath(); ctx.arc(x, hy - .6, 7.4, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x - fl * 2.5, hy - 3.2, 5.4, 2.6, -fl * .3, 0, 7); ctx.fill();
+    // ojos y mejillas
+    ctx.fillStyle = '#2A211C'; ctx.beginPath(); ctx.arc(x - 2.5 + fl * 1.3, hy + .8, .95, 0, 7); ctx.arc(x + 2.5 + fl * 1.3, hy + .8, .95, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(230,110,110,.35)'; ctx.beginPath(); ctx.arc(x - 4.3 + fl, hy + 3, 1.5, 0, 7); ctx.arc(x + 4.3 + fl, hy + 3, 1.5, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = p.hair;
+  if (p.style === 'bun') { ctx.beginPath(); ctx.arc(x - fl * 1.5, hy - 8.3, 3.4, 0, 7); ctx.fill(); }
+  if (p.style === 'pony') { ctx.beginPath(); ctx.ellipse(x - fl * 7.3, hy + 1, 2.6, 5.2, fl * .35, 0, 7); ctx.fill(); }
+  // acción: lector de código de barras
+  if (p.act === 'scan' && !p.moving && !reduce && (t * 1.3 + p.seed) % 1.6 < .35) {
+    const s = p.plan[p.k].face, tgt = P(s[0], s[1], 1.4);
+    ctx.strokeStyle = 'rgba(229,72,77,.85)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x + fl * 7, y - 18); ctx.lineTo(tgt.x, tgt.y); ctx.stroke(); ctx.lineWidth = 1;
+  }
+  labels.push(() => {
+  ctx.font = '600 10.5px Inter, system-ui, sans-serif';
+  const txt = p.isMe ? p.tag : p.name;
+  const tw = ctx.measureText(txt).width + 12, ny = hy - 22;
+  rr(x - tw / 2, ny, tw, 15, 7.5); ctx.fillStyle = p.isMe ? T.accent : T.surface; ctx.fill(); ctx.strokeStyle = p.isMe ? T.accent : p.color; ctx.lineWidth = 1.2; ctx.stroke(); ctx.lineWidth = 1;
+  if (p.isMe) { ctx.beginPath(); ctx.moveTo(x - 4, ny + 15); ctx.lineTo(x, ny + 19); ctx.lineTo(x + 4, ny + 15); ctx.closePath(); ctx.fillStyle = T.accent; ctx.fill(); }
+  ctx.fillStyle = p.isMe ? '#FFFFFF' : T.text; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, x, ny + 7.8);
+  });
+}
+
+/* ---------- Marcadores flotantes por zona ---------- */
+function drawPins(t) {
+  pinRects = [];
+  ZONES.forEach((z, k) => {
+    const [i0, j0, i1, j1] = z.a;
+    const head = z.name.split(' · ')[0].toUpperCase() + (z.id === actual ? ' · ESTÁS AQUÍ' : '');
+    const a = z.at ? P(z.at[0], z.at[1], z.pz) : P((i0 + i1) / 2, (j0 + j1) / 2, z.pz);
+    const bob = reduce ? 0 : Math.sin(t * 1.8 + k) * 2;
+    ctx.font = '700 13px "JetBrains Mono", ui-monospace, monospace'; const w1 = ctx.measureText(z.pin).width;
+    ctx.font = '500 10.5px Inter, system-ui, sans-serif'; const w2 = ctx.measureText(z.cap).width;
+    ctx.font = '600 10px Inter, system-ui, sans-serif'; const w3 = ctx.measureText(head).width;
+    const w = Math.max(w1 + w2 + 8, w3) + 30, h = 36, x = a.x - w / 2, y = a.y - h - 9 + bob;
+    const sel = z.id === selected, hov = z.id === hover;
+    ctx.fillStyle = 'rgba(0,0,0,.12)'; rr(x + 1, y + 2, w, h, 9); ctx.fill();
+    rr(x, y, w, h, 9); ctx.fillStyle = T.surface; ctx.fill();
+    ctx.strokeStyle = sel ? T.accent : (hov ? T.text3 : T.border2); ctx.lineWidth = sel ? 2 : 1; ctx.stroke(); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(a.x - 5, y + h - .5); ctx.lineTo(a.x, y + h + 6); ctx.lineTo(a.x + 5, y + h - .5); ctx.closePath(); ctx.fillStyle = T.surface; ctx.fill();
+    ctx.strokeStyle = sel ? T.accent : (hov ? T.text3 : T.border2); ctx.lineWidth = sel ? 2 : 1;
+    ctx.beginPath(); ctx.moveTo(a.x - 5, y + h); ctx.lineTo(a.x, y + h + 6); ctx.lineTo(a.x + 5, y + h); ctx.stroke(); ctx.lineWidth = 1;
+    // pulso para lo vencido
+    const dc = stColor(z.st);
+    if (z.st === 'crit' && !reduce) { const r = 4 + ((t * 1.2) % 1) * 6; ctx.globalAlpha = 1 - ((t * 1.2) % 1); ctx.strokeStyle = dc; ctx.beginPath(); ctx.arc(x + 13, y + 23, r, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
+    ctx.fillStyle = dc; ctx.beginPath(); ctx.arc(x + 13, y + 23, 4, 0, 7); ctx.fill();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.font = '600 10px Inter, system-ui, sans-serif'; ctx.fillStyle = T.text3; ctx.fillText(head, x + 22, y + 13);
+    ctx.font = '700 13px "JetBrains Mono", ui-monospace, monospace'; ctx.fillStyle = T.text; ctx.fillText(z.pin, x + 22, y + 28);
+    ctx.font = '500 10.5px Inter, system-ui, sans-serif'; ctx.fillStyle = T.text2; ctx.fillText(z.cap, x + 22 + w1 + 6, y + 28);
+    pinRects.push({ id: z.id, x, y, w, h: h + 6 });
+  });
+  // Puerta = cierre de turno
+  if (CIERRE) {
+    const a = P(PUERTA[0] - .1, PUERTA[1] - 1.5, 1.4), bob = reduce ? 0 : Math.sin(t * 1.8 + 9) * 2;
+    const todas = CIERRE.cerradas >= CIERRE.total, head = 'CIERRE DE TURNO', pin = `${CIERRE.cerradas}/${CIERRE.total}`, cap = 'áreas cerradas';
+    ctx.font = '700 13px "JetBrains Mono", ui-monospace, monospace'; const w1 = ctx.measureText(pin).width;
+    ctx.font = '500 10.5px Inter, system-ui, sans-serif'; const w2 = ctx.measureText(cap).width;
+    ctx.font = '600 10px Inter, system-ui, sans-serif'; const w3 = ctx.measureText(head).width;
+    const w = Math.max(w1 + w2 + 8, w3) + 34, h = 36, x = a.x - w / 2, y = a.y - h - 9 + bob, hov = hover === 'cierre';
+    ctx.fillStyle = 'rgba(0,0,0,.12)'; rr(x + 1, y + 2, w, h, 9); ctx.fill();
+    rr(x, y, w, h, 9); ctx.fillStyle = todas ? T['green-bg'] : T.surface; ctx.fill();
+    ctx.strokeStyle = hov ? T.text : T.text3; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(a.x - 5, y + h - .5); ctx.lineTo(a.x, y + h + 6); ctx.lineTo(a.x + 5, y + h - .5); ctx.closePath(); ctx.fillStyle = T.surface; ctx.fill();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '14px system-ui'; ctx.fillStyle = todas ? T.green : T.text2;
+    ctx.fillText(todas ? '✓' : '🔒', x + 14, y + 22);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.font = '600 10px Inter, system-ui, sans-serif'; ctx.fillStyle = T.text3; ctx.fillText(head, x + 26, y + 13);
+    ctx.font = '700 13px "JetBrains Mono", ui-monospace, monospace'; ctx.fillStyle = todas ? T.green : T.text; ctx.fillText(pin, x + 26, y + 28);
+    ctx.font = '500 10.5px Inter, system-ui, sans-serif'; ctx.fillStyle = T.text2; ctx.fillText(cap, x + 26 + w1 + 6, y + 28);
+    pinRects.push({ id: 'cierre', x, y, w, h: h + 6 });
+  }
+}
+
+/* ---------- Movimiento ---------- */
+function updateMe(dt) {
+  if (!ME.route.length) return;
+  const [ti, tj] = ME.route[0]; const di = ti - ME.i, dj = tj - ME.j, dist = Math.hypot(di, dj), step = 5.2 * dt;
+  ME.moving = true; setFacing(ME, di, dj);
+  if (dist <= step) { ME.i = ti; ME.j = tj; ME.route.shift(); if (!ME.route.length) llegue(); }
+  else { ME.i += di / dist * step; ME.j += dj / dist * step; }
+}
+function update(dt) {
+  updateMe(dt);
+  updatePug(dt);
+  if (reduce) return;
+  PEOPLE.forEach(p => {
+    if (p.route.length) {
+      const [ti, tj] = p.route[0]; const di = ti - p.i, dj = tj - p.j, dist = Math.hypot(di, dj), step = 1.9 * dt;
+      p.moving = true; setFacing(p, di, dj);
+      if (dist <= step) { p.i = ti; p.j = tj; p.route.shift(); if (!p.route.length) { p.moving = false; const s = p.plan[p.k]; arrive(p, s); p.wait = s.wait * (.8 + Math.random() * .4); } }
+      else { p.i += di / dist * step; p.j += dj / dist * step; }
+    } else if ((p.wait -= dt) <= 0) {
+      p.k = (p.k + 1) % p.plan.length; const s = p.plan[p.k];
+      p.route = [...(s.via || []), s.to]; p.carry = !!s.carry; p.sit = false; p.act = null; p.label = 'Caminando';
+    }
+  });
+}
+
+/* ---------- Render ---------- */
+let scale = 1, dpr = 1;
+function resize() {
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  // Que el plano completo quepa en la pantalla sin tener que bajar
+  const maxH = Math.max(320, window.innerHeight - 120);
+  const cw = Math.min(stage.clientWidth, maxH * LW / LH); scale = cw / LW;
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(LH * scale * dpr);
+  cv.style.width = cw + 'px'; cv.style.height = (LH * scale) + 'px';
+}
+function frame(t) {
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  ctx.clearRect(0, 0, LW, LH);
+  drawWalls(); drawFloor();
+  const list = boxes.map(b => ({ d: b.depth, f: () => drawBox(b, t) }))
+    .concat(PEOPLE.map(p => ({ d: p.i + p.j + .03, f: () => drawPerson(p, t) })))
+    .concat(objetivoPug() ? [{ d: PUG.i + PUG.j + .02, f: () => drawPug(PUG, t) }] : [])
+    .concat(modo === 'libre' ? [] : [{ d: ME.i + ME.j + .04, f: () => drawPerson(ME, t) }]);
+  list.sort((a, b) => a.d - b.d).forEach(o => o.f());
+  drawPins(t);
+  labels.forEach(f => f()); labels.length = 0;
+}
+let last = performance.now();
+function loop(now) { const dt = Math.min(.05, (now - last) / 1000); last = now; update(dt); frame(now / 1000); requestAnimationFrame(loop); }
+
+/* ---------- Panel ---------- */
+const zlist = document.getElementById('zlist'), detail = document.getElementById('detail');
+const stLabel = { ok: 'Al día', warn: 'Acumulado', crit: 'Hay muestras vencidas', info: 'Pendiente de validar' };
+function renderList() {
+  zlist.innerHTML = ZONES.map(z => `<button class="zrow${z.id === selected ? ' sel' : ''}" data-z="${z.id}" id="z-${z.id}"><i class="dot ${z.st}"></i><span class="zn">${z.name}${z.id === actual ? ' <span class="here">tú</span>' : ''}</span><span class="zv">${z.pin}</span></button>`).join('');
+}
+let lastSig = '';
+const corto = z => z.name.split(' · ')[0];
+function renderDetail(force) {
+  const z = ZONES.find(q => q.id === selected);
+  const here = [...PEOPLE, ...(objetivoPug() ? [PUG] : [])].filter(p => zoneAt(p.i, p.j)?.id === z.id);
+  const sig = [z.id, modo, actual, busy, listo, z.pin].join('|') + '|' + here.map(p => p.name + p.label).join(',');
+  if (!force && sig === lastSig) return; lastSig = sig;
+  const esActual = modo === 'cambio' && z.id === actual;
+  let botones = '';
+  if (modo === 'libre') {
+    botones = `<button class="go" id="go">Abrir ${corto(z)} en el gestor</button>`;
+  } else if (!listo) {
+    botones = `<button class="go" disabled>Cargando el gestor…</button>`;
+  } else if (busy) {
+    botones = `<button class="go" disabled>Caminando a ${corto(z)}…</button><button class="link" id="saltar">Saltar animación</button>`;
+  } else if (modo === 'entrada') {
+    botones = `<button class="go" id="go">Entrar a ${corto(z)}</button><button class="link" id="todas">Entrar sin elegir área (ver todo el gestor)</button>`;
+  } else if (esActual) {
+    botones = `<button class="go" id="quedarme">Seguir en ${corto(z)}</button><button class="link" id="todas">Ver todas las áreas del gestor</button>`;
+  } else {
+    const ac = ZONES.find(q => q.id === actual);
+    botones = `<button class="go" id="go">Pasarme a ${corto(z)}</button>` +
+      (ac ? `<button class="go2" id="quedarme">Quedarme en ${corto(ac)}</button>` : '') +
+      `<button class="link" id="todas">Ver todas las áreas del gestor</button>`;
+  }
+  detail.innerHTML = `
+    <h2>${z.name}${esActual ? '<span class="here">Estás aquí</span>' : ''}</h2>
+    <span class="pill ${z.st}"><i class="dot ${z.st}"></i>${stLabel[z.st]}</span>
+    <dl class="metrics">${z.metrics.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+    ${z.secciones.length ? `<ul class="secs"><li class="lbl" style="list-style:none">Se abre en el gestor</li>${z.secciones.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}
+    <div class="people"><div class="lbl">En esta zona ahora</div>
+      ${here.length ? here.map(p => `<div class="person"><span class="av" style="background:${p.isPug ? '#9A6A3E' : p.color}">${p.isPug ? '🐾' : p.name[0]}</span><div><div class="pn">${p.full || p.name} · ${p.role}</div><div class="pa">${p.label}</div></div></div>`).join('') : '<div class="empty">Nadie trabajando aquí en este momento</div>'}
+    </div>
+    ${botones}`;
+  const on = (id, f) => { const el = document.getElementById(id); if (el) el.onclick = f; };
+  on('go', () => modo === 'libre' ? (enIframe ? avisar({ type: 'vista-nav', nav: z.nav }) : toast(`Abre ${corto(z)}`)) : irA(z.id));
+  on('quedarme', () => avisar({ type: 'vista-cerrar' }));
+  on('todas', () => avisar({ type: 'vista-entrar', zona: 'todas' }));
+  on('saltar', saltar);
+}
+function setHeader() {
+  const t = document.getElementById('titulo'), s = document.getElementById('subtitulo');
+  const nombre = usuarioActual ? usuarioActual.split(' ')[0] : '';
+  const ac = ZONES.find(q => q.id === actual);
+  if (modo === 'entrada') { t.textContent = `Hola${nombre ? ', ' + nombre : ''}. ¿En qué área te toca hoy?`; s.textContent = 'Haz clic en tu área en el plano o en la lista. El gestor se abre con las secciones de esa área.'; }
+  else if (modo === 'cambio') { t.textContent = ac ? `Estás en ${corto(ac)}. ¿A qué área te pasas?` : '¿A qué área te pasas?'; s.textContent = 'Elige la nueva área y tu personaje camina hasta allá. Esc para volver.'; }
+  else { t.textContent = 'Laboratorio de Biología Molecular'; s.textContent = 'Haz clic en una zona del plano para ver qué está pasando ahí.'; }
+}
+function select(id) { if (busy) return; selected = id; renderList(); renderDetail(true); }
+zlist.addEventListener('click', e => { const b = e.target.closest('.zrow'); if (b) select(b.dataset.z); });
+zlist.addEventListener('dblclick', e => { const b = e.target.closest('.zrow'); if (b && modo !== 'libre') irA(b.dataset.z); });
+
+/* ---------- Caminar a otra área ---------- */
+let destino = null;
+function irA(id) {
+  if (busy || !listo) return;
+  if (modo === 'cambio' && id === actual) { avisar({ type: 'vista-cerrar' }); return; }
+  destino = id; busy = true; selected = id; renderList(); renderDetail(true);
+  const ida = actual ? RUTAS[actual].slice(0, -1).reverse() : [];
+  ME.route = [...ida, ...RUTAS[id]];
+  toast(actual ? `Pasando de ${corto(ZONES.find(q => q.id === actual))} a ${corto(ZONES.find(q => q.id === id))}…` : `Entrando a ${corto(ZONES.find(q => q.id === id))}…`);
+  if (reduce) saltar();
+}
+function saltar() { if (!busy) return; const s = spotOf(destino); ME.i = s[0]; ME.j = s[1]; ME.route = []; llegue(); }
+function llegue() {
+  ME.moving = false; ponerEn(destino);
+  actual = destino; setHeader(); renderList(); renderDetail(true);
+  const id = destino;
+  setTimeout(() => { busy = false; modo = 'cambio'; avisar({ type: 'vista-entrar', zona: id }); setHeader(); renderDetail(true); }, reduce ? 0 : 450);
+}
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && modo === 'cambio' && !busy && actual) avisar({ type: 'vista-cerrar' }); });
+
+let tt; const toastEl = document.getElementById('toast');
+function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => toastEl.classList.remove('on'), 2600); }
+
+/* ---------- Interacción con el plano ---------- */
+function hitZone(e) {
+  const r = cv.getBoundingClientRect(); const x = (e.clientX - r.left) / scale, y = (e.clientY - r.top) / scale;
+  for (let k = pinRects.length - 1; k >= 0; k--) { const q = pinRects[k]; if (x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h) return q.id; }
+  const g = unproject(x, y); return zoneAt(g.i, g.j)?.id || null;
+}
+cv.addEventListener('mousemove', e => { hover = hitZone(e); cv.style.cursor = hover ? 'pointer' : 'default'; });
+cv.addEventListener('mouseleave', () => { hover = null; });
+cv.addEventListener('click', e => { if (busy) { saltar(); return; } const id = hitZone(e); if (id === 'cierre') { avisar({ type: 'vista-cierre' }); return; } if (id) select(id); });
+cv.addEventListener('dblclick', e => { const id = hitZone(e); if (id && id !== 'cierre' && modo !== 'libre') irA(id); });
+
+/* ---------- Reloj ---------- */
+const clockEl = document.getElementById('clock');
+function tick() { const d = new Date(); clockEl.textContent = d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' }) + ' · ' + d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' }); }
+
+/* ---------- Datos que manda el gestor (prototipo) ---------- */
+window.addEventListener('message', e => {
+  const d = e.data;
+  if (d && d.type === 'vista-modo') {
+    configurarUsuario(d.usuario, d.rol);
+    modo = d.modo; actual = d.actual || null; busy = false; destino = null;
+    ponerEn(actual); selected = actual || selected;
+    setHeader(); renderList(); renderDetail(true);
+    return;
+  }
+  if (!d || d.type !== 'vista-datos') return;
+  for (const z of ZONES) if (d.zonas[z.id]) Object.assign(z, d.zonas[z.id]);
+  if (d.cierre) CIERRE = d.cierre;
+  listo = true;
+  renderList(); renderDetail(true);
+});
+/* ---------- Arranque ---------- */
+readTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
+new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+window.addEventListener('resize', resize);
+if ('ResizeObserver' in window) new ResizeObserver(resize).observe(stage);
+resize(); renderList(); renderDetail(true); tick();
+setInterval(tick, 15000); setInterval(() => renderDetail(false), 500);
+document.fonts && document.fonts.ready.then(() => {});
+requestAnimationFrame(loop);
+})();
+</script>
+</html>
