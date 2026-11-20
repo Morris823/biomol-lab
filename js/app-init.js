@@ -24,6 +24,9 @@ async function initApp() {
   if (typeof actualizarBadgeTB === 'function') actualizarBadgeTB();
   setupRealtime();
   nav('dashboard', document.querySelector('.nav-item'));
+  // Los marcados "sin ingreso" que ya tienen ingreso pierden la marca antes de contarlos
+  const {data: marcados} = await sb.from('recepciones').select('nro_muestra').eq('sin_ingreso', true);
+  if (marcados && marcados.length && typeof curarSinIngreso === 'function') await curarSinIngreso(marcados.map(r => r.nro_muestra));
   const {count} = await sb.from('recepciones').select('*',{count:'exact',head:true}).eq('sin_ingreso',true);
   const badge = document.getElementById('badge-sin-ingreso');
   if (badge && count > 0) { badge.textContent = count; badge.style.display = 'inline'; }

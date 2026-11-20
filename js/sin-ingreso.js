@@ -1,13 +1,32 @@
 // ============================================================
 // SIN INGRESO
 // ============================================================
+// Revisa tubos marcados "sin ingreso" que en realidad ya tienen ingreso (subió
+// después de escanearlos, por cualquier camino) y les quita la marca. Así la
+// marca nunca queda pegada aunque la reconciliación del importador no haya corrido.
+async function curarSinIngreso(nros) {
+  const lista = [...new Set((nros || []).filter(Boolean))];
+  const conIngreso = new Set();
+  for (let i = 0; i < lista.length; i += 100) {
+    const {data} = await sb.from('ingresos').select('nro_muestra').in('nro_muestra', lista.slice(i, i + 100));
+    (data || []).forEach(r => conIngreso.add(r.nro_muestra));
+  }
+  const arr = [...conIngreso];
+  for (let i = 0; i < arr.length; i += 100) {
+    await sb.from('recepciones').update({sin_ingreso: false}).in('nro_muestra', arr.slice(i, i + 100)).eq('sin_ingreso', true);
+  }
+  return conIngreso;
+}
+
 async function loadSinIngreso() {
   const {data, error} = await sb.from('recepciones')
     .select('*')
     .eq('sin_ingreso', true)
     .order('fecha_recepcion', {ascending: false});
   if (error) { toast('Error: '+error.message,'err'); return; }
-  const rows = data || [];
+  const curados = await curarSinIngreso((data || []).map(r => r.nro_muestra));
+  if (curados.size) toast(`${curados.size} tubo(s) ya tenían ingreso: se les quitó la marca de sin ingreso`, 'info');
+  const rows = (data || []).filter(r => !curados.has(r.nro_muestra));
   // Actualizar badge
   const badge = document.getElementById('badge-sin-ingreso');
   if (badge) {

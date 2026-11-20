@@ -80,6 +80,11 @@ async function processIngresosFile(file) {
   const unicos = ordenados.filter(r => { if (vistosOd.has(r.od_id)) return false; vistosOd.add(r.od_id); return true; });
   const repetidosArchivo = paraInsertar.length - unicos.length;
 
+  // Lista de LabCore sin columnas clave: se guarda igual, pero queda incompleta
+  const sinCodigo = unicos.filter(r => !r.estudio_codigo).length, sinSede = unicos.filter(r => !r.sede).length;
+  if (unicos.length && (sinCodigo / unicos.length > 0.5 || sinSede / unicos.length > 0.5)) {
+    toast(`Ojo: este archivo no trae ${sinCodigo / unicos.length > 0.5 ? 'el CÓDIGO DEL ESTUDIO' : ''}${sinCodigo / unicos.length > 0.5 && sinSede / unicos.length > 0.5 ? ' ni ' : ''}${sinSede / unicos.length > 0.5 ? 'la SEDE' : ''}. Los ingresos se guardan, pero incompletos: descarga la lista de LabCore con el formato de siempre.`, 'err');
+  }
   setImpProgress(60, `Formato detectado. Insertando ${unicos.length} registros...`);
   let nuevos = 0, dups = 0;
   const guardados = new Set();   // nro_muestra con ingreso confirmado en la base (nuevo o ya existente)

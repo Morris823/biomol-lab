@@ -91,19 +91,22 @@ async function loadRecepciones() {
 
   // Tubos que no están en memoria (allMuestras solo trae estados activos): se buscan
   // directo en ingresos, en una sola consulta y solo para los de hoy que falten.
-  const faltan = [...new Set(dataNormal.filter(r => !r.sin_ingreso && !allMuestras.some(m => m.nro_muestra === r.nro_muestra)).map(r => r.nro_muestra))];
+  const faltan = [...new Set(dataNormal.filter(r => !allMuestras.some(m => m.nro_muestra === r.nro_muestra)).map(r => r.nro_muestra))];
   const extra = {};
   if (faltan.length) {
     const {data: ing} = await sb.from('ingresos').select('nro_muestra,apellidos,nombres,estudio_nombre,estudio_codigo').in('nro_muestra', faltan);
     (ing || []).forEach(i => (extra[i.nro_muestra] = extra[i.nro_muestra] || []).push({ ...i, paciente: `${i.apellidos || ''}, ${i.nombres || ''}` }));
   }
 
+  const curarMarca = [];
   recepciones = dataNormal.map(r => {
     const muestrasRec = allMuestras.filter(m => m.nro_muestra === r.nro_muestra);
     const fuente = muestrasRec.length ? muestrasRec : (extra[r.nro_muestra] || []);
     const pruebasUnicas = [...new Set(fuente.map(m => nombreCorto(m.estudio_nombre, m.estudio_codigo)))];
-    // Sin ningún ingreso en la base = sin ingreso, diga lo que diga la marca guardada
-    const sinIngreso = r.sin_ingreso || fuente.length === 0;
+    // Manda lo que hay en la base: con ingreso no es "sin ingreso" aunque la marca
+    // haya quedado guardada (el ingreso subió después del escaneo); sin ingreso, sí.
+    const sinIngreso = fuente.length === 0;
+    if (r.sin_ingreso && !sinIngreso) curarMarca.push(r.nro_muestra);
     return {
       hora: new Date(r.fecha_recepcion).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}),
       cod: r.nro_muestra,
@@ -113,6 +116,8 @@ async function loadRecepciones() {
       user: r.recibido_por
     };
   });
+  // Quitar en la base la marca "sin ingreso" a los que ya tienen ingreso
+  if (curarMarca.length) sb.from('recepciones').update({ sin_ingreso: false }).in('nro_muestra', [...new Set(curarMarca)]).eq('sin_ingreso', true).then(() => {});
 
   recepcionesTB = dataTB.map(r => {
     const ingreso = allMuestras.find(m => m.nro_muestra === r.nro_muestra);
