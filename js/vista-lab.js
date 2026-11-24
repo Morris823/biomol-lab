@@ -133,6 +133,12 @@
   chip.style.cssText = 'display:none;font-size:11px;margin-left:10px';
   chip.onclick = () => window.cambiarArea();
   document.getElementById('page-title').after(chip);
+  // Volver a ver el resumen del día
+  const btnUrg = document.createElement('button');
+  btnUrg.className = 'btn'; btnUrg.style.cssText = 'display:none;font-size:11px;margin-left:6px';
+  btnUrg.innerHTML = '<i class="ti ti-alert-triangle"></i> Lo urgente';
+  btnUrg.onclick = () => verResumenDiario();
+  chip.after(btnUrg);
 
   function aplicarArea(id) {
     areaActual = id;
@@ -153,14 +159,14 @@
       <button class="btn" style="width:100%;justify-content:center;font-size:11px;background:var(--surface)" onclick="cambiarArea()"><i class="ti ti-walk"></i> Cambiar de área</button>`;
     tarjeta.style.display = '';
     chip.innerHTML = `<i class="ti ti-map-pin"></i> ${nombre} · cambiar`;
-    chip.style.display = '';
+    chip.style.display = ''; btnUrg.style.display = '';
     const inicio = a ? a.inicio : 'dashboard';
     nav(inicio, navEl(inicio));
   }
   function limpiarArea() {
     areaActual = null;
     sidebar.querySelectorAll('.nav-item, .nav-section').forEach(el => { el.style.display = ''; });
-    tarjeta.style.display = 'none'; chip.style.display = 'none';
+    tarjeta.style.display = 'none'; chip.style.display = 'none'; btnUrg.style.display = 'none';
   }
 
   // Mensajes desde el plano
@@ -175,6 +181,8 @@
       if (anterior !== d.zona) toast(anterior ? `Te pasaste a ${n}` : `Bienvenido/a a ${n}`, 'ok');
     }
     if (d.type === 'vista-cerrar') cerrarLobby();
+    // Al entrar a su área: el resumen del día (si el gestor ya terminó de cargar)
+    if ((d.type === 'vista-entrar' || d.type === 'vista-cerrar') && datosListos && typeof mostrarResumenDiario === 'function') setTimeout(() => mostrarResumenDiario(), 400);
   });
 
   let ultimoEnvio = 0, calculando = false;
@@ -204,6 +212,7 @@
     datosListos = true;
     await cargarFrame();
     enviarDatos(true);
+    if (!abierta() && typeof mostrarResumenDiario === 'function') mostrarResumenDiario();
     // initApp deja el Dashboard abierto: si la persona ya eligió área, se lleva a su sección de inicio
     // (solo si sigue en el Dashboard, para no sacarla de donde ya se metió)
     if (areaActual && document.getElementById('page-dashboard').classList.contains('active')) { const a = AREAS[areaActual]; const ini = a ? a.inicio : 'dashboard'; nav(ini, navEl(ini)); }

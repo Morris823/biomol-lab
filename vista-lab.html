@@ -258,6 +258,9 @@ B(2.15, 11.75, 0, .65, .7, .6, '#5B6573', { chair: true });
 const desk3 = B(4.3, 9.3, 0, 1.4, 2.2, 1.2, '#D9CBB4', { top: '#E6DAC6' });
 on(desk3, B(5.45, 9.9, 1.2, .12, 1.0, .7, '#2D3036', { screen: true, typing: 'Val3' }), 1);
 B(3.45, 10.05, 0, .65, .7, .6, '#5B6573', { chair: true });
+const desk4 = B(4.3, 6.95, 0, 1.4, 2.0, 1.2, '#D9CBB4', { top: '#E6DAC6' });
+on(desk4, B(5.45, 7.45, 1.2, .12, 1.0, .7, '#2D3036', { screen: true, typing: 'Val4' }), 1);
+B(3.45, 7.6, 0, .65, .7, .6, '#5B6573', { chair: true });
 B(0.35, 13.2, 0, .5, .5, .45, '#B07A52', { plant: true });
 B(5.25, 6.35, 0, .5, .5, .45, '#B07A52', { plant: true });
 // Neveras y descarte
@@ -293,7 +296,7 @@ const PEOPLE = [
       { to: [14.8, 3.8], wait: 6, face: [14.8, 1.8], via: [[4.0, 10.0], [4.0, 5.2], [14.8, 5.2]], label: 'Revisando la corrida de TB' },
       { to: [2.47, 12.1], wait: 10, face: [1, 12.1], sit: true, act: 'type', via: [[14.8, 5.2], [4.0, 5.2], [4.0, 10.0]], label: 'Validando TB' },
     ] },
-  { name: 'Samanta', full: 'Samanta', match: ['samanta'], role: 'Bacterióloga', color: '#3C3489', coat: '#F7F8FA', hair: '#1E1A18', style: 'pony', skin: '#C98F6B',
+  { name: 'Mateo', full: 'Mateo Morales', match: ['mateo'], role: 'Bacteriólogo', color: '#1A56DB', coat: '#F7F8FA', hair: '#2A211C', style: 'short', skin: '#E2AE88',
     plan: [
       { to: [8.0, 3.2], wait: 6, face: [8.0, 1.6], label: 'Montando matrícula de HLA-B27' },
       { to: [10.3, 3.2], wait: 5, face: [10.3, 1.6], label: 'Revisando la corrida en el m2000' },
@@ -305,23 +308,29 @@ const PEOPLE = [
       { to: [11.0, 3.0], wait: 5, face: [11.6, 1.2], label: 'Analizando curvas en el m2000' },
       { to: [7.4, 3.4], wait: 4, face: [7.4, 1.6], label: 'Cargando el m2000' },
     ] },
-  { name: 'Mateo', full: 'Mateo Morales', match: ['mateo'], role: 'Bacteriólogo', color: '#1A56DB', coat: '#F7F8FA', hair: '#2A211C', style: 'short', skin: '#E2AE88',
+  { name: 'Samanta', full: 'Samanta', match: ['samanta'], role: 'Bacterióloga', color: '#3C3489', coat: '#F7F8FA', hair: '#1E1A18', style: 'pony', skin: '#C98F6B',
     plan: [
-      { to: [1.4, 3.1], wait: 7, face: [1.4, 1.8], act: 'led', label: 'Cargando el Alinity m' },
+      { to: [1.2, 3.1], wait: 7, face: [1.2, 1.8], act: 'led', label: 'Cargando el Alinity m' },
+      { to: [2.2, 4.9], wait: 4, face: [2.2, 2.2], label: 'Revisando resultados del Alinity m' },
       { to: [5.1, 4.5], wait: 5, face: [5.1, 3.2], label: 'Revisando reprocesos' },
-      { to: [3.0, 4.6], wait: 4, face: [3.0, 2.2], label: 'Revisando resultados del Alinity m' },
+    ] },
+  { name: 'Ángela L.', full: 'Ángela López', match: ['angela', 'lopez'], role: 'Bacterióloga', color: '#0F766E', coat: '#F7F8FA', hair: '#6B3E26', style: 'long', skin: '#E8B996',
+    plan: [
+      { to: [4.0, 4.4], wait: 6, face: [5.0, 3.2], label: 'Preparando muestras para el Alinity m' },
+      { to: [2.0, 3.2], wait: 5, face: [2.0, 1.8], act: 'led', label: 'Cargando racks en el Alinity m' },
+      { to: [0.9, 4.6], wait: 4, face: [0.9, 2.2], label: 'Descargando racks' },
     ] },
   { name: 'Didier', full: 'Didier', match: ['didier'], role: 'Bacteriólogo', color: '#9A3412', coat: '#F7F8FA', hair: '#3A2A20', style: 'short', skin: '#D49A73',
     plan: [
-      { to: [2.6, 3.2], wait: 6, face: [2.6, 1.8], act: 'led', label: 'Cargando racks en el Alinity m' },
-      { to: [4.0, 5.1], wait: 4, face: [4.0, 2.2], label: 'Revisando el estado del Alinity m' },
-      { to: [5.1, 4.3], wait: 5, face: [5.1, 3.2], label: 'Preparando muestras' },
+      { to: [2.8, 3.2], wait: 6, face: [2.8, 1.8], act: 'led', label: 'Cargando racks en el Alinity m' },
+      { to: [4.0, 5.3], wait: 4, face: [4.0, 2.2], label: 'Revisando el estado del Alinity m' },
+      { to: [5.2, 4.2], wait: 5, face: [5.2, 3.2], label: 'Preparando muestras' },
     ] },
   { name: 'Santi', full: 'Santiago', match: ['santiago'], role: 'Bacteriólogo', color: '#4D7C0F', coat: '#F7F8FA', hair: '#5A3B22', style: 'short', skin: '#E8B996',
     plan: [
       { to: [3.6, 3.2], wait: 6, face: [3.6, 1.8], label: 'Cambiando reactivos del Alinity m' },
-      { to: [1.0, 4.4], wait: 4, face: [1.0, 2.2], label: 'Descargando racks' },
-      { to: [5.2, 3.9], wait: 5, face: [5.2, 3.2], label: 'Montando reprocesos' },
+      { to: [1.6, 5.2], wait: 4, face: [1.6, 2.2], label: 'Revisando el control de calidad' },
+      { to: [4.6, 4.9], wait: 5, face: [5.0, 3.2], label: 'Montando reprocesos' },
     ] },
   { name: 'Jeffer', full: 'Jefferson', match: ['jefferson'], role: 'Bacteriólogo', color: '#B91C1C', coat: '#F7F8FA', hair: '#1E1A18', style: 'short', skin: '#C98F6B',
     plan: [
@@ -332,8 +341,14 @@ const PEOPLE = [
   { name: 'Marlon', full: 'Marlon', match: ['marlon'], role: 'Bacteriólogo', color: '#6D28D9', coat: '#F7F8FA', hair: '#241C17', style: 'short', skin: '#D9A07C',
     plan: [
       { to: [2.47, 8.5], wait: 14, face: [1, 8.5], sit: true, act: 'type', label: 'Validando resultados de VPH' },
-      { to: [4.0, 7.2], wait: 3, face: [5.3, 13.0], label: 'Estirando las piernas' },
+      { to: [3.2, 10.0], wait: 3, face: [5.3, 13.0], label: 'Estirando las piernas' },
       { to: [2.47, 8.5], wait: 10, face: [1, 8.5], sit: true, act: 'type', label: 'Importando validados' },
+    ] },
+  { name: 'Ángela A.', full: 'Ángela Arévalo', match: ['angela', 'arevalo'], role: 'Bacterióloga', color: '#C2410C', coat: '#F7F8FA', hair: '#1E1A18', style: 'bun', skin: '#D9A07C',
+    plan: [
+      { to: [3.83, 7.95], wait: 13, face: [5.6, 7.95], sit: true, act: 'type', label: 'Validando pruebas manuales' },
+      { to: [7.6, 8.1], wait: 4, face: [7.6, 7.0], via: [[3.6, 6.2], [6.4, 6.2]], label: 'Revisando la nevera' },
+      { to: [3.83, 7.95], wait: 10, face: [5.6, 7.95], sit: true, act: 'type', via: [[6.4, 6.2], [3.6, 6.2]], label: 'Validando carga viral' },
     ] },
   { name: 'Yadira', full: 'Yadira', match: ['yadira'], role: 'Bacterióloga', color: '#BE185D', coat: '#F7F8FA', hair: '#2B1B14', style: 'long', skin: '#D9A07C',
     plan: [
