@@ -34,7 +34,6 @@ function nav(name, el) {
   if (name === 'correo') initCorreo();
   if (name === 'revision-manuales') cargarSeguimiento('manuales');
   if (name === 'revision-tb') cargarSeguimiento('tb');
-  if (name === 'checklist') initChecklist();
   if (name === 'descarte') initDescarte();
   if (name === 'estadistica') initEstadistica();
   if (name === 'cierre') initCierre();

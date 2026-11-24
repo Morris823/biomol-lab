@@ -30,12 +30,6 @@
       uno(sb.from('corridas_tb').select('corr_id,created_at').order('created_at', { ascending: false }).limit(1)),
       uno(sb.from('registros_descarte').select('fecha_descarte').order('fecha_descarte', { ascending: false }).limit(1)),
     ]);
-    // Cierre de turno de hoy (una fila)
-    const cl = await uno(sb.from('checklist_turno').select('*').eq('fecha', hoyCO()).limit(1));
-    const cierres = typeof cierresDe === 'function' ? cierresDe(cl) : {};
-    const totalAreas = typeof AREAS_CIERRE !== 'undefined' ? AREAS_CIERRE.length : 5;
-    const nCerradas = typeof AREAS_CIERRE !== 'undefined' ? AREAS_CIERRE.filter(a => cierres[a.id]?.fecha).length : 0;
-    const txtCierre = area => { const x = cierres[area]; return x && x.fecha ? `Cerrada · ${(x.por || '').split(' ')[0]}${x.legado ? '' : ' ' + fmtHora(x.fecha)}` : 'Sin cerrar'; };
     const posUlt = ultMat ? await contar(sb.from('matricula_posiciones').select('id', head).eq('matricula_id', ultMat.id).eq('es_control', false)) : 0;
 
     // Recepción
@@ -58,9 +52,9 @@
     const z = {
       recepcion: { pin: miles(pend.length), cap: 'por recibir', st: pend.length > 150 ? 'warn' : 'ok',
         metrics: [['Escaneadas hoy', miles(escHoy)], ['Pendientes por recibir', `${miles(pend.length)} pruebas · ${miles(tubos(pend))} tubos`], ['Sin ingreso', miles(sinIng)], ['Por rescatar de hematología', miles(rescate)]] },
-      extraccion: { name: 'Equipos · m2000sp / m2000rt', pin: miles(repAct), cap: 'reprocesos activos', st: repAct > 20 ? 'warn' : 'ok',
+      extraccion: { name: 'Equipos · Alinity m', pin: miles(repAct), cap: 'reprocesos activos', st: repAct > 20 ? 'warn' : 'ok',
         metrics: [['Reprocesos activos', miles(repAct)], ['VPH sin validar', miles(vphSV)], ['VIH sin validar', miles(vihSV)]] },
-      amplificacion: { name: 'Pruebas manuales · Genotipo', pin: ultMat ? miles(posUlt) : '—', cap: ultMat ? 'en la última matrícula' : 'sin matrículas', st: 'ok',
+      amplificacion: { name: 'Manuales (m2000) y Genotipo', pin: ultMat ? miles(posUlt) : '—', cap: ultMat ? 'en la última matrícula' : 'sin matrículas', st: 'ok',
         metrics: [['Última matrícula', ultMat ? `${ultMat.mat_id} · ${fechaCorta(ultMat.created_at)}` : '—'], ['Muestras montadas', ultMat ? miles(posUlt) : '—'], ['Manuales sin validar', miles(manSinVal)]] },
       tb: { pin: miles(tb.vencidas || tb.porVencer || tb.espera.length), cap: tb.vencidas ? 'con más de 48 h' : tb.porVencer ? 'por vencer (36 h+)' : 'esperando resultado',
         st: tb.vencidas ? 'crit' : tb.porVencer ? 'warn' : 'ok',
@@ -70,22 +64,19 @@
       descarte: { name: 'Neveras, remisiones y descarte', pin: miles(remitidas.length), cap: 'en laboratorio externo', st: 'ok',
         metrics: [['Remitidas sin resultado', miles(remitidas.length)], ['Último descarte', ultDesc ? fmt(ultDesc.fecha_descarte) : '—']] },
     };
-    for (const id in z) z[id].metrics.push(['Cierre de turno', txtCierre(ZONA_A_CIERRE[id])]);
-    return { zonas: z, cierre: { cerradas: nCerradas, total: totalAreas } };
+    return { zonas: z };
   }
-  // Zona del plano → área del cierre de turno
-  const ZONA_A_CIERRE = { recepcion: 'recepcion', extraccion: 'equipos', amplificacion: 'manuales', tb: 'tb', validacion: 'validacion', descarte: 'validacion' };
 
   // ---------------- Áreas del laboratorio → secciones del gestor ----------------
   const AREAS = {
     recepcion:     { nombre: 'Recepción',                    icono: 'ti-scan',         inicio: 'recepcion',    secciones: ['ingresos', 'recepcion', 'pendientes', 'hematologia', 'sin-ingreso', 'anulados', 'correo'] },
-    extraccion:    { nombre: 'Equipos m2000',                icono: 'ti-cpu',          inicio: 'reprocesos',   secciones: ['reprocesos', 'estadistica'] },
-    amplificacion: { nombre: 'Pruebas manuales y Genotipo',  icono: 'ti-layout-grid',  inicio: 'matriculas',   secciones: ['matriculas', 'revision-manuales', 'remisiones', 'genotipo'] },
+    extraccion:    { nombre: 'Equipos Alinity m',            icono: 'ti-cpu',          inicio: 'reprocesos',   secciones: ['reprocesos', 'estadistica'] },
+    amplificacion: { nombre: 'Pruebas manuales (m2000)',  icono: 'ti-layout-grid',  inicio: 'matriculas',   secciones: ['matriculas', 'revision-manuales', 'remisiones', 'genotipo'] },
     tb:            { nombre: 'Tuberculosis',                 icono: 'ti-lungs',        inicio: 'tuberculosis', secciones: ['tuberculosis', 'revision-tb'] },
     validacion:    { nombre: 'Validación',                   icono: 'ti-circle-check', inicio: 'validacion',   secciones: ['validacion', 'reprocesos', 'estadistica', 'descarte'] },
     descarte:      { nombre: 'Neveras y descarte',           icono: 'ti-trash',        inicio: 'descarte',     secciones: ['descarte', 'remisiones'] },
   };
-  const COMUNES = ['dashboard', 'checklist', 'muestras'];   // visibles en cualquier área
+  const COMUNES = ['dashboard', 'muestras'];   // visibles en cualquier área
   let areaActual = null;
   let usuarios = null;
 
@@ -108,7 +99,6 @@
   const post = msg => fr.contentWindow && fr.contentWindow.postMessage(msg, location.origin === 'null' ? '*' : location.origin);
   const abierta = () => lobby.style.display === 'block';
   let datosListos = false;
-  let entregaPendiente = false;
 
   async function rolDe(nombre) {
     if (!usuarios) { const { data } = await sb.from('usuarios').select('nombre,rol'); usuarios = data || []; }
@@ -122,8 +112,6 @@
     await cargarFrame();
     post({ type: 'vista-modo', modo, actual: areaActual && areaActual !== 'todas' ? areaActual : null, usuario: currentUser, rol: await rolDe(currentUser) });
     if (datosListos) enviarDatos(true);
-    // Si la entrega de turno ya salió, se guarda para después de elegir el área
-    if (window._modalEntrega && window._modalEntrega.style.display !== 'none') { window._modalEntrega.style.display = 'none'; entregaPendiente = true; }
     fr.focus();
   }
   function cerrarLobby() {
@@ -187,16 +175,6 @@
       if (anterior !== d.zona) toast(anterior ? `Te pasaste a ${n}` : `Bienvenido/a a ${n}`, 'ok');
     }
     if (d.type === 'vista-cerrar') cerrarLobby();
-    // La puerta del laboratorio: ir al cierre de turno (del área donde está, si ya eligió una)
-    if (d.type === 'vista-cierre') {
-      if (!areaActual) aplicarArea('todas');
-      cerrarLobby();
-      irACierreArea(ZONA_A_CIERRE[areaActual] || null);
-    }
-    if ((d.type === 'vista-entrar' || d.type === 'vista-cerrar' || d.type === 'vista-cierre') && entregaPendiente) {
-      entregaPendiente = false;
-      setTimeout(() => { if (window._modalEntrega) window._modalEntrega.style.display = 'flex'; else entregaOriginal(); }, 350);
-    }
   });
 
   let ultimoEnvio = 0, calculando = false;
@@ -204,9 +182,9 @@
     if (calculando || (!force && Date.now() - ultimoEnvio < 60000)) return;
     calculando = true;
     try {
-      const { zonas, cierre } = await calcularZonas();
-      for (const id in zonas) zonas[id].secciones = AREAS[id] ? [...AREAS[id].secciones, ...COMUNES.filter(c => c !== 'checklist')].map(etiqueta) : [];
-      post({ type: 'vista-datos', zonas, cierre });
+      const { zonas } = await calcularZonas();
+      for (const id in zonas) zonas[id].secciones = AREAS[id] ? [...AREAS[id].secciones, ...COMUNES].map(etiqueta) : [];
+      post({ type: 'vista-datos', zonas });
       ultimoEnvio = Date.now();
     } catch (err) { console.error('Vista del laboratorio:', err); }
     calculando = false;
@@ -226,13 +204,9 @@
     datosListos = true;
     await cargarFrame();
     enviarDatos(true);
-    if (areaActual) { const a = AREAS[areaActual]; const ini = a ? a.inicio : 'dashboard'; nav(ini, navEl(ini)); }
-  };
-  // La entrega de turno aparece cuando la persona ya entró a su área, no encima del plano
-  const entregaOriginal = verificarEntregaTurno;
-  window.verificarEntregaTurno = verificarEntregaTurno = function () {
-    if (abierta()) { entregaPendiente = true; return Promise.resolve(); }
-    return entregaOriginal();
+    // initApp deja el Dashboard abierto: si la persona ya eligió área, se lleva a su sección de inicio
+    // (solo si sigue en el Dashboard, para no sacarla de donde ya se metió)
+    if (areaActual && document.getElementById('page-dashboard').classList.contains('active')) { const a = AREAS[areaActual]; const ini = a ? a.inicio : 'dashboard'; nav(ini, navEl(ini)); }
   };
   const logoutOriginal = logout;
   window.logout = logout = function () { logoutOriginal(); datosListos = false; limpiarArea(); cerrarLobby(); };

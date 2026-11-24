@@ -73,8 +73,9 @@ function chipSeg(el, val, area) {
 async function cargarSeguimiento(area) {
   // Las validadas ya no se descargan: son historial que nadie consulta aquí y era lo
   // que más pesaba (crece todos los días). Se revisan solo pendientes y gestionadas.
+  // Solo pendientes y gestionadas: las validadas y las que pasaron a nueva muestra salen de la lista
   const {data} = await sb.from('seguimiento_manuales')
-    .select('*').eq('area', area).neq('estado', 'validado').order('fecha', { ascending: false });
+    .select('*').eq('area', area).in('estado', SEG_ACTIVOS).order('fecha', { ascending: false });
   segRows[area] = data || [];
 
   // Verificar cuáles están validadas en BD aunque no estén en allMuestras.
@@ -111,8 +112,10 @@ async function cargarSeguimiento(area) {
     aValidar.forEach(r => { r.estado = 'validado'; });
   }
 
+  await cargarSegExtra(segRows[area].filter(r => SEG_ACTIVOS.includes(r.estado)).map(r => r.nro_muestra));
+  await cruzarNuevasMuestrasSeg(area);
+  segRows[area] = segRows[area].filter(r => SEG_ACTIVOS.includes(r.estado));
   const nrosSeg = segRows[area].map(r => r.nro_muestra);
-  await cargarSegExtra(segRows[area].filter(r => r.estado !== 'validado').map(r => r.nro_muestra));
   if (area === 'manuales') {
     await cargarEnMatriculaGlobal(nrosSeg);
     await cargarEnRemisionGlobal(nrosSeg);
@@ -179,7 +182,8 @@ function renderSegTabla(area) {
   const f = segFiltro[area];
   let rows = f === 'sin' ? segRows[area].filter(r => r.estado === 'pendiente')
            : f === 'ges' ? segRows[area].filter(r => r.estado === 'gestionado')
-           : segRows[area].filter(r => r.estado !== 'validado');
+           : segRows[area].filter(r => SEG_ACTIVOS.includes(r.estado));
+  if (f === 'vence') rows = segRows[area].filter(r => SEG_ACTIVOS.includes(r.estado) && (opSeg(r)?.quedan ?? 99) <= 1);
 
   const q = (document.getElementById(`seg-buscar-${area}`)?.value || '').trim().toLowerCase();
   if (q) {
@@ -227,7 +231,7 @@ function renderSegTabla(area) {
   if (!tbody) return;
 
   if (!rows.length) {
-    const vacio = { activos: 'Sin pendientes activos 🎉', sin: 'Nada sin gestionar 🎉', ges: 'No hay gestionados' };
+    const vacio = { activos: 'Sin pendientes activos 🎉', sin: 'Nada sin gestionar 🎉', ges: 'No hay gestionados', vence: 'Nada vencido ni por vencer 🎉' };
     tbody.innerHTML = `<tr><td colspan="11" class="empty-state">${vacio[segFiltro[area]] || 'Sin registros de revisión'}</td></tr>`;
     return;
   }
@@ -266,11 +270,7 @@ function renderSegTabla(area) {
       <td style="font-size:11px">${muestra?.paciente || '—'}${enGrupo ? ` <span style="font-size:9px;color:var(--green);border:0.5px solid var(--green-border);padding:1px 5px;border-radius:8px;background:var(--green-bg)">${etiquetaGrupo}</span>` : ''}${remInfo ? ` <span style="font-size:9px;color:var(--purple);border:0.5px solid #B6B1F0;padding:1px 5px;border-radius:8px;background:var(--purple-bg)"><i class="ti ti-send"></i> ${etiquetaRem}</span>` : ''}</td>
       <td style="font-size:11px">${prueba}</td>
       <td style="font-size:11px;color:var(--text2)">${muestra?.sede || '—'}</td>
-      <td style="text-align:center">
-        ${dias !== null
-          ? `<span style="color:${dias > limite ? 'var(--red)' : 'var(--green)'};font-weight:600">${dias}d</span>`
-          : '<span style="color:var(--text3)">—</span>'}
-      </td>
+      <td>${celdaOpSeg(opSeg(r))}</td>
       <td style="text-align:center">
         <span style="${estiloRecepcion};font-size:11px;padding-bottom:2px">${enRecepcion ? 'Recibida' : 'No recibida'}</span>
       </td>
@@ -287,6 +287,7 @@ function renderSegTabla(area) {
           onchange="cambiarEstadoSeguimiento('${r.id}','${area}',this.value)">
           <option value="pendiente" ${r.estado==='pendiente'?'selected':''}>Pendiente</option>
           <option value="gestionado" ${r.estado==='gestionado'?'selected':''}>Gestionado</option>
+          <option value="nueva-muestra">Nueva muestra</option>
           <option value="validado" ${r.estado==='validado'?'selected':''}>Validado</option>
         </select>
       </td>
@@ -310,8 +311,9 @@ async function cambiarEstadoSeguimiento(id, area, estado) {
   await sb.from('seguimiento_manuales').update({ estado, gestionado_por: currentUser, fecha: new Date().toISOString() }).eq('id', id);
   const row = segRows[area].find(r => r.id === id);
   if (row) { row.estado = estado; row.gestionado_por = currentUser; }
+  if (!SEG_ACTIVOS.includes(estado)) segRows[area] = segRows[area].filter(r => r.id !== id);
   renderSegTabla(area);
-  toast(`Estado actualizado a ${estado}`, 'ok');
+  toast(estado === 'nueva-muestra' ? 'Marcada como nueva muestra: sale de la lista' : estado === 'validado' ? 'Marcada como validada: sale de la lista' : `Estado actualizado a ${estado}`, 'ok');
 }
 
 async function eliminarSeguimiento(id, area) {
@@ -377,7 +379,7 @@ async function procesarSeguimientoPendientes(event, area) {
 
       for (const m of muestrasUnicas) {
         const nro = m.nro;
-        if (existentesMap[nro] === 'gestionado' || existentesMap[nro] === 'validado') { ignorados++; continue; }
+        if (['gestionado', 'validado', 'nueva-muestra'].includes(existentesMap[nro])) { ignorados++; continue; }
         if (existentesMap[nro] === 'pendiente') { yaExisten++; continue; }
 
         const enGestor = allMuestras.find(x => x.nro_muestra === nro || x.od_id === m.od_id);
@@ -385,7 +387,7 @@ async function procesarSeguimientoPendientes(event, area) {
         if (!enGestor) {
           const {data: val} = await sb.from('validaciones').select('od_id').eq('od_id', m.od_id||'').limit(1);
           tipo = (val && val.length) ? 'validado_sin_ingreso' : 'fantasma';
-        } else if (enGestor.estado === 'validado') { ignorados++; continue; }
+        } else if (enGestor.estado === 'validado' || enGestor.estado === 'nueva-muestra') { ignorados++; continue; }
 
         await sb.from('seguimiento_manuales').insert({
           nro_muestra: nro,
@@ -411,6 +413,73 @@ async function procesarSeguimientoPendientes(event, area) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
+// Revisión de pendientes: estados que se ven y oportunidad por prueba
+// ============================================================
+// En la lista solo quedan las pendientes y las gestionadas. Las validadas y las
+// que pasaron a nueva muestra salen solas (igual que las validadas).
+const SEG_ACTIVOS = ['pendiente', 'gestionado'];
+
+// Si la prueba ya tiene una nueva muestra registrada (tabla nuevas_muestras) o en el
+// gestor quedó en estado "nueva muestra", pasa a 'nueva-muestra' y sale de la lista.
+async function cruzarNuevasMuestrasSeg(area) {
+  const activos = segRows[area].filter(r => SEG_ACTIVOS.includes(r.estado));
+  if (!activos.length) return;
+  const nros = [...new Set(activos.map(r => r.nro_muestra).filter(Boolean))];
+  const nms = [];
+  for (let i = 0; i < nros.length; i += 100) {
+    const {data} = await sb.from('nuevas_muestras').select('od_id,nro_muestra,estudio_nombre').in('nro_muestra', nros.slice(i, i + 100));
+    nms.push(...(data || []));
+  }
+  const norm = t => String(t || '').replace(/\s+/g, ' ').trim().toUpperCase();
+  const tieneNM = r => {
+    if (muestraSeg(r.nro_muestra)?.estado === 'nueva-muestra') return true;
+    const delTubo = nms.filter(n => n.nro_muestra === r.nro_muestra);
+    if (!delTubo.length) return false;
+    if (r.od_id && delTubo.some(n => n.od_id)) return delTubo.some(n => n.od_id === r.od_id);
+    return delTubo.some(n => !n.estudio_nombre || !r.estudio_nombre || norm(n.estudio_nombre) === norm(r.estudio_nombre));
+  };
+  const aNM = activos.filter(tieneNM);
+  for (let i = 0; i < aNM.length; i += 100) {
+    await sb.from('seguimiento_manuales').update({ estado: 'nueva-muestra' }).in('id', aNM.slice(i, i + 100).map(r => r.id));
+  }
+  aNM.forEach(r => { r.estado = 'nueva-muestra'; });
+}
+
+// Oportunidad (días hábiles) de cada prueba según CONFIG_PRUEBA, contada desde la
+// recepción (o el ingreso si aún no llega), con la fecha en que vence.
+const sigDiaSeg = iso => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
+const venceCacheSeg = new Map();
+function venceHabil(desdeISO, n) {
+  const k = desdeISO + '|' + n;
+  if (venceCacheSeg.has(k)) return venceCacheSeg.get(k);
+  let d = desdeISO, c = 0;
+  while (c < n) { const sig = sigDiaSeg(d); if (diasHabilesGlobal(d, sig) === 1) c++; d = sig; }
+  venceCacheSeg.set(k, d); return d;
+}
+function opSeg(r) {
+  const m = muestraSeg(r.nro_muestra);
+  const ref = m?.fecha_recepcion || m?.fecha_ingreso;
+  if (!ref) return null;
+  const prueba = m ? nombreCorto(m.estudio_nombre, m.estudio_codigo) : r.estudio_nombre;
+  const limite = CONFIG_PRUEBA[prueba]?.limite || 3;
+  const desde = new Date(ref).toLocaleDateString('en-CA', { timeZone: TZ_CO });
+  const usados = diasHabilesGlobal(desde, hoyCO());
+  return { usados, limite, quedan: limite - usados, vence: venceHabil(desde, limite), recibida: !!m?.fecha_recepcion };
+}
+function celdaOpSeg(op) {
+  if (!op) return '<span style="color:var(--text3)">—</span>';
+  const col = op.quedan < 0 ? 'var(--red)' : op.quedan <= 1 ? 'var(--yellow)' : 'var(--green)';
+  const txt = op.quedan < 0 ? `Vencida hace ${-op.quedan} d` : op.quedan === 0 ? 'Vence hoy' : op.quedan === 1 ? 'Vence mañana' : `Quedan ${op.quedan} d`;
+  const pct = Math.min(100, Math.max(4, op.usados / op.limite * 100));
+  const venceTxt = new Date(op.vence + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
+  return `<div class="gv-op" title="${op.usados} de ${op.limite} días hábiles${op.recibida ? ' desde la recepción' : ' desde el ingreso (aún no se recibe)'} · vence ${venceTxt}">
+    <span class="gv-op-txt" style="color:${col}">${txt}</span>
+    <div class="gv-op-bar"><i style="width:${pct}%;background:${col}"></i></div>
+    <span class="gv-sub">${op.usados}/${op.limite} d háb. · vence ${venceTxt}</span>
+  </div>`;
 }
 
 function diasHabilesGlobal(fechaInicio, fechaFin) {
