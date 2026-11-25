@@ -459,15 +459,36 @@ function venceHabil(desdeISO, n) {
   while (c < n) { const sig = sigDiaSeg(d); if (diasHabilesGlobal(d, sig) === 1) c++; d = sig; }
   venceCacheSeg.set(k, d); return d;
 }
-function opSeg(r) {
-  const m = muestraSeg(r.nro_muestra);
+// Primer día de montaje de la prueba desde una fecha (igual que el Dashboard): la
+// oportunidad se cuenta desde ese montaje. El sábado puede ser día de montaje (VPH),
+// el domingo y los festivos no.
+function proximoMontajeGlobal(desdeISO, montajeDow) {
+  if (!montajeDow || !montajeDow.length) return desdeISO;
+  for (let i = 0; i <= 14; i++) {
+    const d = new Date(desdeISO + 'T12:00:00'); d.setDate(d.getDate() + i);
+    const iso = d.toISOString().slice(0, 10), dow = d.getDay();
+    const ayer = new Date(d); ayer.setDate(d.getDate() - 1);
+    const habil = dow === 6 || diasHabilesGlobal(ayer.toISOString().slice(0, 10), iso) === 1;   // festivo entre semana = no
+    if (montajeDow.includes(dow) && dow !== 0 && habil) return iso;
+  }
+  return desdeISO;
+}
+// Oportunidad de una muestra: días hábiles desde el primer montaje después de la
+// recepción (o del ingreso, si todavía no llega) contra el límite de la prueba
+function oportunidadMuestra(m) {
   const ref = m?.fecha_recepcion || m?.fecha_ingreso;
   if (!ref) return null;
-  const prueba = m ? nombreCorto(m.estudio_nombre, m.estudio_codigo) : r.estudio_nombre;
-  const limite = CONFIG_PRUEBA[prueba]?.limite || 3;
+  const cfg = CONFIG_PRUEBA[nombreCorto(m.estudio_nombre, m.estudio_codigo)] || {};
+  const limite = cfg.limite || 3;
   const desde = new Date(ref).toLocaleDateString('en-CA', { timeZone: TZ_CO });
-  const usados = diasHabilesGlobal(desde, hoyCO());
-  return { usados, limite, quedan: limite - usados, vence: venceHabil(desde, limite), recibida: !!m?.fecha_recepcion };
+  const montaje = proximoMontajeGlobal(desde, cfg.montajeDow);
+  const hoy = hoyCO();
+  const usados = montaje >= hoy ? 0 : diasHabilesGlobal(montaje, hoy);
+  return { usados, limite, quedan: limite - usados, vence: venceHabil(montaje, limite), montaje, porMontar: montaje > hoy, recibida: !!m.fecha_recepcion };
+}
+function opSeg(r) {
+  const m = muestraSeg(r.nro_muestra);
+  return m ? oportunidadMuestra(m) : null;
 }
 function celdaOpSeg(op) {
   if (!op) return '<span style="color:var(--text3)">—</span>';
@@ -475,10 +496,11 @@ function celdaOpSeg(op) {
   const txt = op.quedan < 0 ? `Vencida hace ${-op.quedan} d` : op.quedan === 0 ? 'Vence hoy' : op.quedan === 1 ? 'Vence mañana' : `Quedan ${op.quedan} d`;
   const pct = Math.min(100, Math.max(4, op.usados / op.limite * 100));
   const venceTxt = new Date(op.vence + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
-  return `<div class="gv-op" title="${op.usados} de ${op.limite} días hábiles${op.recibida ? ' desde la recepción' : ' desde el ingreso (aún no se recibe)'} · vence ${venceTxt}">
+  const montajeTxt = new Date(op.montaje + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
+  return `<div class="gv-op" title="${op.usados} de ${op.limite} días hábiles desde el montaje del ${montajeTxt} (primer montaje después de ${op.recibida ? 'la recepción' : 'el ingreso; aún no se recibe'}) · vence ${venceTxt}">
     <span class="gv-op-txt" style="color:${col}">${txt}</span>
     <div class="gv-op-bar"><i style="width:${pct}%;background:${col}"></i></div>
-    <span class="gv-sub">${op.usados}/${op.limite} d háb. · vence ${venceTxt}</span>
+    <span class="gv-sub">${op.porMontar ? 'Se monta ' + montajeTxt : op.usados + '/' + op.limite + ' d háb.'} · vence ${venceTxt}</span>
   </div>`;
 }
 

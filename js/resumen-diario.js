@@ -17,12 +17,8 @@ async function renderUrgentes(el) {
   const M = allMuestras || [];
   const corto = m => nombreCorto(m.estudio_nombre, m.estudio_codigo);
   const hoy = hoyCO();
-  const op = m => {
-    const ref = m.fecha_recepcion || m.fecha_ingreso; if (!ref) return null;
-    const lim = (typeof CONFIG_PRUEBA !== 'undefined' && CONFIG_PRUEBA[corto(m)]?.limite) || 3;
-    const usados = diasHabilesGlobal(new Date(ref).toLocaleDateString('en-CA', { timeZone: TZ_CO }), hoy);
-    return lim - usados;   // días hábiles que quedan (negativo = vencida)
-  };
+  // Días hábiles que quedan (negativo = vencida), desde el primer montaje de la prueba
+  const op = m => oportunidadMuestra(m)?.quedan ?? null;
   const tubos = arr => new Set(arr.map(m => m.nro_muestra)).size;
   const manuales = typeof PRUEBAS_MANUALES_SANGRE !== 'undefined' ? PRUEBAS_MANUALES_SANGRE : new Set();
 
