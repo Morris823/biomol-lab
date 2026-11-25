@@ -50,4 +50,4 @@ function copiarSedesNoReconocidas() {
 // INICIO
 // ============================================================
 loadUsers();
-setTimeout(verificarEntregaTurno, 800);
+

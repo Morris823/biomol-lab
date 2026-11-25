@@ -2,4 +2,4 @@
 // INICIO
 // ============================================================
 loadUsers();
-setTimeout(verificarEntregaTurno, 800);
+

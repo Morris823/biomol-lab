@@ -530,3 +530,18 @@ create policy acceso_app on public.importaciones for all to public using (true);
 -- Correr ANTES de pasar la rama a main.
 alter table public.checklist_turno
   add column if not exists cierres_area jsonb default '{}'::jsonb;
+-- 2) Para que no vuelva a pasar: la propia base quita la marca en el momento en que
+--    entra el ingreso, sin depender del navegador (aunque cierren la pestaña o el
+--    ingreso entre por cualquier camino: lista, manual o lo que venga).
+create or replace function public.quitar_sin_ingreso()
+returns trigger language plpgsql as $$
+begin
+  update public.recepciones set sin_ingreso = false
+  where nro_muestra = new.nro_muestra and sin_ingreso = true;
+  return new;
+end $$;
+
+drop trigger if exists trg_quitar_sin_ingreso on public.ingresos;
+create trigger trg_quitar_sin_ingreso
+after insert on public.ingresos
+for each row execute function public.quitar_sin_ingreso();

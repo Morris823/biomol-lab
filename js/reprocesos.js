@@ -19,6 +19,7 @@ const MOTIVOS = [
   {cod:'3000', desc:'Enviado a excepción manualmente por supervisor'},
   {cod:'3010', desc:'Macrofallida en unidad de amplificación — detección'},
   {cod:'3014', desc:'La temperatura del termociclador eléctrico no se encuentra dentro de los parámetros'},
+  {cod:'3022', desc:'Pérdida de pasos detectada en el conjunto óptico'},
   {cod:'3024', desc:'Verificación de lectura de fondo fallida en unidad de amplificación'},
   {cod:'3041', desc:'Error al recuperar los datos ópticos brutos'},
   {cod:'3043', desc:'Analizador detenido — análisis programado enviado a excepción'},

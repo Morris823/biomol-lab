@@ -132,7 +132,6 @@
     <div class="nav-section">
       <div class="nav-label">General</div>
       <div class="nav-item active" onclick="nav('dashboard',this)"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
-      <div class="nav-item" onclick="nav('checklist',this)"><i class="ti ti-clipboard-check"></i> Cierre de turno</div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Auxiliares — Recepción</div>
@@ -391,7 +390,7 @@
           <div class="panel">
             <div class="panel-header">
               <span class="panel-title">Muestras escaneadas en este turno</span>
-              <button class="btn btn-yellow" onclick="irACierreArea('recepcion')"><i class="ti ti-lock"></i> Cerrar turno</button>
+              <button class="btn btn-yellow" onclick="nav('cierre',null)"><i class="ti ti-lock"></i> Cerrar turno</button>
             </div>
             <table><thead><tr><th>Hora</th><th>Código</th><th>Paciente</th><th>Pruebas</th><th></th></tr></thead>
             <tbody id="rec-tabla"><tr><td colspan="4" class="empty-state">Escanea la primera muestra del turno...</td></tr></tbody></table>
@@ -400,7 +399,8 @@
 
         <!-- CIERRE TURNO -->
         <div class="page" id="page-cierre">
-          <div style="max-width:440px">
+          <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+          <div style="max-width:440px;flex:1 1 380px">
             <div class="panel">
               <div class="panel-header"><span class="panel-title"><i class="ti ti-lock"></i> Cierre de turno</span></div>
               <div style="padding:16px">
@@ -448,7 +448,8 @@
             </div>
             <div id="cierre-ok" style="display:none"></div>
           </div>
-        </div>
+                  </div>
+</div>
 
         <!-- VALIDACION -->
         <div class="page" id="page-validacion">
@@ -829,6 +830,7 @@
                 <span class="chip active" id="seg-chip-activos-manuales" onclick="chipSeg(this,'activos','manuales')" title="Sin gestionar + gestionados">Todos</span>
                 <span class="chip" id="seg-chip-sin-manuales" onclick="chipSeg(this,'sin','manuales')">Sin gestionar</span>
                 <span class="chip" id="seg-chip-ges-manuales" onclick="chipSeg(this,'ges','manuales')">Gestionados</span>
+                <span class="chip" id="seg-chip-vence-manuales" onclick="chipSeg(this,'vence','manuales')" title="Vencidas o que vencen hoy o mañana"><i class="ti ti-clock-exclamation"></i> Por vencer</span>
               </div>
             </div>
             <div style="padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
@@ -857,7 +859,7 @@
                 <thead style="position:sticky;top:0;z-index:2;background:var(--surface)">
                   <tr>
                     <th>Código</th><th>Paciente</th><th>Prueba</th><th>Sede</th>
-                    <th>Días háb.</th><th>Recepción</th><th>Nota auxiliar</th>
+                    <th>Oportunidad</th><th>Recepción</th><th>Nota auxiliar</th>
                     <th>Observación seguimiento</th><th>Por</th><th>Estado</th><th></th>
                   </tr>
                 </thead>
@@ -899,6 +901,7 @@
                 <span class="chip active" id="seg-chip-activos-tb" onclick="chipSeg(this,'activos','tb')" title="Sin gestionar + gestionados">Todos</span>
                 <span class="chip" id="seg-chip-sin-tb" onclick="chipSeg(this,'sin','tb')">Sin gestionar</span>
                 <span class="chip" id="seg-chip-ges-tb" onclick="chipSeg(this,'ges','tb')">Gestionados</span>
+                <span class="chip" id="seg-chip-vence-tb" onclick="chipSeg(this,'vence','tb')" title="Vencidas o que vencen hoy o mañana"><i class="ti ti-clock-exclamation"></i> Por vencer</span>
               </div>
             </div>
             <div style="padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;font-size:11px">
@@ -923,7 +926,7 @@
                 <thead style="position:sticky;top:0;z-index:2;background:var(--surface)">
                   <tr>
                     <th>Código</th><th>Paciente</th><th>Prueba</th><th>Sede</th>
-                    <th>Días háb.</th><th>Recepción</th><th>Nota auxiliar</th>
+                    <th>Oportunidad</th><th>Recepción</th><th>Nota auxiliar</th>
                     <th>Observación seguimiento</th><th>Por</th><th>Estado</th><th></th>
                   </tr>
                 </thead>
@@ -960,30 +963,6 @@
         </div>
 
         <!-- CHECKLIST CIERRE DE TURNO -->
-        <div class="page" id="page-checklist">
-          <div style="max-width:960px;height:calc(100vh - 120px);overflow-y:auto;padding-right:8px">
-            <div class="panel" style="margin-bottom:14px">
-              <div class="panel-header">
-                <span class="panel-title"><i class="ti ti-calendar"></i> Cierre de turno</span>
-                <input type="date" id="cl-fecha" style="margin-left:12px" onchange="cambiarFechaChecklist()" />
-                <span style="font-size:11px;color:var(--text3);margin-left:12px">Cada quien cierra su área, o una sola persona cierra todas</span>
-                <div id="cl-boton-cerrar-wrap" style="margin-left:auto"></div>
-              </div>
-              <div id="cl-estado-areas" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:12px 14px"></div>
-              <div id="cl-obs-general" style="padding:0 14px 14px"></div>
-            </div>
-            <div id="cl-areas"></div>
-
-            <!-- HISTORIAL -->
-            <div class="panel" style="margin-bottom:14px">
-              <div class="panel-header"><span class="panel-title"><i class="ti ti-history"></i> Historial de cierres</span></div>
-              <table><thead><tr><th>Fecha</th><th style="text-align:center">Checklist</th><th>Áreas cerradas</th></tr></thead>
-                <tbody id="cl-historial"><tr><td colspan="3" class="empty-state">Cargando...</td></tr></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
         <!-- DESCARTE -->
         <!-- ESTADÍSTICA MENSUAL EQUIPOS -->
         <div class="page" id="page-estadistica">
@@ -1268,13 +1247,13 @@
 <script src="js/correo.js"></script>
 <script src="js/revision-pendientes.js"></script>
 <script src="js/remisiones.js"></script>
-<script src="js/checklist.js"></script>
 <script src="js/descarte.js"></script>
 <script src="js/estadistica.js"></script>
 <script src="js/sedes.js"></script>
 <script src="js/genotipo.js"></script>
 <script src="js/subidas.js"></script>
 <script src="js/oportunidad-tb.js"></script>
+<script src="js/resumen-diario.js"></script>
 <script src="js/vista-lab.js"></script>
 </body>
 </html>

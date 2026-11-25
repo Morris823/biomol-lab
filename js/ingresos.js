@@ -112,6 +112,10 @@ async function processIngresosFile(file) {
     }
     setImpProgress(60 + Math.round(((i+BATCH)/unicos.length)*35), `Insertando... ${Math.min(i+BATCH,unicos.length)}/${unicos.length}`);
   }
+  // Quitar la marca "sin ingreso" a los tubos escaneados antes de subir la lista. Va
+  // de primero (antes de recargar el gestor): si alguien cierra la pestaña al ver
+  // "completada", la marca ya quedó corregida.
+  await reconciliarSinIngreso([...guardados]);
   setImpProgress(100, fallidos.length ? `Importación con ${fallidos.length} fila(s) sin guardar` : '¡Importación completada!');
   document.getElementById('imp-total').textContent = rows.length;
   document.getElementById('imp-nuevos').textContent = nuevos;
@@ -131,9 +135,6 @@ async function processIngresosFile(file) {
 
   const nTubos2 = await registrarTubosAdicionales(tubosPorOd);
 
-  // Recepciones "sin ingreso" que ahora sí tienen ingreso: SOLO las de tubos cuyo
-  // ingreso quedó guardado de verdad (antes se marcaban aunque el lote hubiera fallado)
-  await reconciliarSinIngreso([...guardados]);
 
   if (fallidos.length) toast(`Atención: ${fallidos.length} ingreso(s) no se guardaron — revisa el resultado de la importación`, 'err');
   toast(`${nuevos} ingresos importados` +
@@ -169,25 +170,15 @@ async function registrarTubosAdicionales(tubosPorOd) {
 }
 
 async function reconciliarSinIngreso(nrosImportados) {
-  // Traer todas las recepciones marcadas como sin_ingreso
-  const {data: sinIngreso} = await sb.from('recepciones')
-    .select('nro_muestra')
-    .eq('sin_ingreso', true);
-  if (!sinIngreso || sinIngreso.length === 0) return;
-
-  // Ver cuáles de esas ahora sí están en los ingresos recién subidos
-  const importadosSet = new Set(nrosImportados.filter(Boolean));
-  const aActualizar = sinIngreso.filter(r => importadosSet.has(r.nro_muestra));
-
-  if (aActualizar.length === 0) return;
-
-  // Actualizar a sin_ingreso = false
-  for (const r of aActualizar) {
-    await sb.from('recepciones').update({sin_ingreso: false}).eq('nro_muestra', r.nro_muestra);
+  // Solo los tubos de este archivo que estaban marcados "sin ingreso" (lotes de 100)
+  const nros = [...new Set(nrosImportados.filter(Boolean))];
+  let n = 0;
+  for (let i = 0; i < nros.length; i += 100) {
+    const {data} = await sb.from('recepciones').update({sin_ingreso: false})
+      .in('nro_muestra', nros.slice(i, i + 100)).eq('sin_ingreso', true).select('nro_muestra');
+    n += (data || []).length;
   }
-
-  toast(`${aActualizar.length} muestra(s) sin ingreso ahora reconciliadas ✓`, 'info');
-  await loadMuestras({force:true});
+  if (n) toast(`${n} muestra(s) sin ingreso ahora reconciliadas ✓`, 'info');
 }
 
 function setImpProgress(pct, lbl) {
