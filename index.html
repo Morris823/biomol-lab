@@ -200,6 +200,18 @@
                 <span class="chip" id="gv-chip-ges" onclick="gvSetFiltro('ges')" title="Las que se sacaron de la lista porque no van a llegar">Gestionadas</span>
                 <input id="gv-buscar" placeholder="Buscar código, paciente, cédula, ID…" oninput="gvRenderLista()" style="width:240px;font-size:12px;padding:5px 9px">
               </div>
+              <!-- Solo en "No se realiza · correo enviado": filtrar y ordenar por fecha -->
+              <div id="gv-nsr-filtros" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;border-bottom:0.5px solid var(--border);font-size:12px">
+                <span style="color:var(--text2)"><i class="ti ti-calendar"></i> Fecha de</span>
+                <select id="gv-nsr-campo" onchange="gvRenderLista()" style="font-size:12px;padding:4px 6px">
+                  <option value="correo">envío del correo</option>
+                  <option value="recepcion">recepción</option>
+                </select>
+                <span style="color:var(--text2)">desde</span><input type="date" id="gv-nsr-desde" onchange="gvRenderLista()" style="font-size:12px;padding:3px 6px">
+                <span style="color:var(--text2)">hasta</span><input type="date" id="gv-nsr-hasta" onchange="gvRenderLista()" style="font-size:12px;padding:3px 6px">
+                <button class="btn" id="gv-nsr-orden" style="font-size:11.5px" onclick="gvNsrOrden = gvNsrOrden === 'desc' ? 'asc' : 'desc'; gvRenderLista()"></button>
+                <button class="btn" style="font-size:11.5px" onclick="document.getElementById('gv-nsr-desde').value='';document.getElementById('gv-nsr-hasta').value='';gvRenderLista()">Limpiar fechas</button>
+              </div>
               <div class="gv-tabla-wrap"><table>
                 <thead><tr><th>Código LabCore</th><th>Paciente</th><th>Ingreso CV VIH</th><th>Sede</th><th>Recepción</th><th>Oportunidad (30 d háb.)</th><th>CV del tubo</th><th>Estado</th><th>Nota auxiliares</th><th>ID</th><th></th></tr></thead>
                 <tbody id="gv-lista"><tr><td colspan="11" class="empty-state">Cargando…</td></tr></tbody>
