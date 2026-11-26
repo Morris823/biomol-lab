@@ -305,7 +305,25 @@ function gvBotones(m) {
   b.push(`<button class="btn" title="Detalle" onclick="event.stopPropagation();gvAbrir('${m.od_id}')"><i class="ti ti-file-description"></i></button>`);
   return `<div class="gv-acc">${b.join('')}</div>`;
 }
-let gvNsrOrden = 'desc';
+let gvNsrOrden = 'desc';   // por defecto: correo más reciente primero
+// Clic en el encabezado de Recepción o de Correo enviado: ordena por esa fecha; otro clic invierte
+function gvNsrSort(campo) {
+  const sel = document.getElementById('gv-nsr-campo');
+  if (sel.value === campo) gvNsrOrden = gvNsrOrden === 'desc' ? 'asc' : 'desc';
+  else { sel.value = campo; gvNsrOrden = 'desc'; }
+  gvRenderLista();
+}
+function gvNsrEncabezados(campo) {
+  const ths = document.getElementById('gv-lista')?.closest('table')?.tHead?.rows[0]?.cells;
+  if (!ths) return;
+  const icono = c => campo === c ? `<i class="ti ti-arrow-${gvNsrOrden === 'desc' ? 'down' : 'up'}" style="font-size:11px"></i>` : '<i class="ti ti-arrows-sort" style="font-size:9px;opacity:.5"></i>';
+  const poner = (th, c, txt) => {
+    if (campo) { th.innerHTML = `${txt} ${icono(c)}`; th.style.cursor = 'pointer'; th.title = 'Ordenar por esta fecha'; th.onclick = () => gvNsrSort(c); }
+    else { th.innerHTML = c === 'recepcion' ? 'Recepción' : ''; th.style.cursor = ''; th.title = ''; th.onclick = null; }
+  };
+  poner(ths[4], 'recepcion', 'Recepción');
+  poner(ths[ths.length - 1], 'correo', 'Correo enviado');
+}
 // Fecha (AAAA-MM-DD, hora Colombia) por la que se filtra/ordena la lista de "correo enviado"
 function gvNsrFecha(m, campo) {
   if (campo === 'recepcion') return m.fecha_recepcion ? new Date(m.fecha_recepcion).toLocaleDateString('en-CA', { timeZone: TZ_CO }) : null;
@@ -324,6 +342,7 @@ function gvRenderLista() {
   // "No se realiza · correo enviado": filtro por rango de fechas y orden por fecha
   const barNsr = document.getElementById('gv-nsr-filtros');
   if (barNsr) barNsr.style.display = gvFiltro === 'nsrenv' ? 'flex' : 'none';
+  if (gvFiltro !== 'nsrenv') gvNsrEncabezados(null);
   if (gvFiltro === 'nsrenv') {
     const campo = document.getElementById('gv-nsr-campo')?.value || 'correo';
     const desde = document.getElementById('gv-nsr-desde')?.value || '', hasta = document.getElementById('gv-nsr-hasta')?.value || '';
@@ -331,6 +350,7 @@ function gvRenderLista() {
     arr = arr.filter(m => { const f = fechaDe(m); return (!desde || (f && f >= desde)) && (!hasta || (f && f <= hasta)); });
     arr.sort((a, b) => { const fa = fechaDe(a) || '', fb = fechaDe(b) || ''; return gvNsrOrden === 'asc' ? fa.localeCompare(fb) : fb.localeCompare(fa); });
     const bo = document.getElementById('gv-nsr-orden');
+    gvNsrEncabezados(campo);
     if (bo) bo.innerHTML = gvNsrOrden === 'asc' ? '<i class="ti ti-sort-ascending"></i> Más antiguas primero' : '<i class="ti ti-sort-descending"></i> Más recientes primero';
   }
   document.getElementById('gv-chip-sincv')?.classList.toggle('active', gvFiltro === 'sincv');
